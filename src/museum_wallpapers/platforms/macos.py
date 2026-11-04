@@ -234,11 +234,9 @@ class MacPlatform(Platform):
         """{screen id: path} as macOS shows them on the current Space."""
         def read():
             from AppKit import NSWorkspace
-            workspace, result, settling = NSWorkspace.sharedWorkspace(), {}, self._settling()
+            # What macOS reports, settling or not: a new Space has its own wallpaper.
+            workspace, result = NSWorkspace.sharedWorkspace(), {}
             for key, screen, _monitor in _screens():
-                if settling and key in self.last_images:
-                    result[key] = self.last_images[key]
-                    continue
                 url = workspace.desktopImageURLForScreen_(screen)
                 result[key] = url.path() if url is not None and url.isFileURL() else ""
             return result

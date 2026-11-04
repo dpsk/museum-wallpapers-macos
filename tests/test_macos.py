@@ -117,9 +117,7 @@ class MacPlatformTest(unittest.TestCase):
                     images[monitor.id] = make_jpeg(Path(tmp) / f"live-{monitor.id}.jpg",
                                                    size=(monitor.width // 4, monitor.height // 4))
                 self.platform.set_wallpaper(images)
-                # While macOS settles, reads answer with what was set; then ask macOS itself.
-                self.assertEqual(self.platform.wallpapers(), {k: str(Path(v).resolve()) for k, v in images.items()})
-                self.platform._set_at = float("-inf")
+                # macOS reports the new wallpaper after a moment.
                 deadline, shown = time.monotonic() + 10, {}
                 while time.monotonic() < deadline:
                     shown = self.platform.wallpapers()
