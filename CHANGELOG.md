@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — 2026-11-04
+
+- The .dmg opens as a laid-out window: the app, an arrow to Applications,
+  and how to allow the app on its first start (Done, then System Settings →
+  Privacy & Security → Open Anyway), with the one-line Terminal install as
+  the way around it.
+
 ## 0.1.1 — 2026-11-04
 
 - Fixed: the released 0.1.0 could not reach Wikimedia or GitHub

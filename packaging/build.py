@@ -9,8 +9,9 @@
    asks the user to allow it once, see README);
 4. the built app's own self-test, in a throwaway home; the build fails if
    it fails;
-5. dist/MuseumWallpapers-<version>-<apple-silicon|intel>.dmg with the app and
-   an Applications link to drag it onto.
+5. dist/MuseumWallpapers-<version>-<apple-silicon|intel>.dmg with the app, an
+   Applications link to drag it onto and a window that says how to allow the
+   app on its first start (dmg.py).
 """
 
 import json
@@ -29,6 +30,9 @@ DIST = ROOT / "dist"
 sys.path.insert(0, str(ROOT / "src"))
 
 from museum_wallpapers import APP_NAME, VERSION, resources  # noqa: E402
+
+sys.path.insert(0, str(HERE))
+import dmg as dmg_window  # noqa: E402
 
 
 def run(*command, **options):
@@ -69,14 +73,10 @@ def main():
     if result.returncode or not data["ok"]:
         sys.exit(f"self-test of the built app failed: {failed}")
 
-    staging = BUILD / "dmg"
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(parents=True)
-    run("ditto", app, staging / app.name)
-    (staging / "Applications").symlink_to("/Applications")
     dmg = DIST / f"MuseumWallpapers-{VERSION}-{arch_name()}.dmg"
     dmg.unlink(missing_ok=True)
-    run("hdiutil", "create", "-volname", APP_NAME, "-srcfolder", staging, "-ov", "-format", "UDZO", dmg)
+    print(f"+ dmgbuild {dmg.name}", flush=True)
+    dmg_window.build(app, dmg, APP_NAME, BUILD / "dmg-window")
     print(f"built {dmg} ({dmg.stat().st_size / 1e6:.1f} MB)")
 
 
