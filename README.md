@@ -205,6 +205,8 @@ Layout:
 | `packaging/` | PyInstaller spec and the build script (app bundle, ad-hoc signature, self-test, .dmg) |
 | `.github/workflows/build.yml` | Tests on Linux and macOS, builds the Apple silicon and Intel .dmg, attaches them to `v*` releases |
 
+What is left before the first release: [HANDOFF.md](HANDOFF.md).
+
 ## License
 
 MIT

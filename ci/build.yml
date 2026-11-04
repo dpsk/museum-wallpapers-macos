@@ -1,0 +1,83 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Unit tests (core, card, app logic; the dev platform)
+        run: python -m pytest -q
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: apple-silicon
+          - runner: macos-15-intel
+            arch: intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+
+      - name: Unit tests (incl. the macOS layer and a real WKWebView)
+        run: python -m pytest -q
+
+      - name: Live wallpaper round trip on the runner's desktop
+        # The runner's desktop session is unusual; failures here are
+        # informative, not fatal.
+        continue-on-error: true
+        env:
+          MUSEUM_WALLPAPERS_LIVE_WALLPAPER: "1"
+        run: python -m pytest -q -s tests/test_macos.py
+
+      - name: Build the app, self-test it, make the .dmg
+        run: python packaging/build.py
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: MuseumWallpapers-${{ matrix.arch }}
+          path: dist/MuseumWallpapers-*.dmg
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: selftest-${{ matrix.arch }}
+          path: packaging/build/selftest.json
+        if: always()
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test-linux, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: MuseumWallpapers-*
+          merge-multiple: true
+          path: dist
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*.dmg
+          generate_release_notes: true
