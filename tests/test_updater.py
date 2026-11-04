@@ -157,6 +157,28 @@ def fake_dmg(folder, app):
 
 
 @unittest.skipUnless(sys.platform == "darwin", "macOS only: hdiutil, codesign")
+class AttachTest(unittest.TestCase):
+    BUSY = updater.UpdateError("hdiutil failed: hdiutil: attach failed - Resource temporarily unavailable")
+
+    def test_a_busy_hdiutil_is_retried(self):
+        with mock.patch.object(updater, "_run", side_effect=[self.BUSY, self.BUSY, ""]) as run, \
+             mock.patch.object(updater.time, "sleep"):
+            updater.attach("x.dmg", "/tmp/m")
+        self.assertEqual(run.call_count, 3)
+
+    def test_it_gives_up_after_a_few_tries(self):
+        with mock.patch.object(updater, "_run", side_effect=self.BUSY) as run, \
+             mock.patch.object(updater.time, "sleep"), self.assertRaises(updater.UpdateError):
+            updater.attach("x.dmg", "/tmp/m")
+        self.assertEqual(run.call_count, updater.ATTACH_TRIES)
+
+    def test_other_errors_are_not_retried(self):
+        broken = updater.UpdateError("hdiutil failed: image not recognized")
+        with mock.patch.object(updater, "_run", side_effect=broken) as run, self.assertRaises(updater.UpdateError):
+            updater.attach("x.dmg", "/tmp/m")
+        self.assertEqual(run.call_count, 1)
+
+
 class StageAndSwapTest(unittest.TestCase):
     """The real install path on a throwaway "Applications" folder."""
 

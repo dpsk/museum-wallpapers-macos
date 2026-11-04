@@ -190,6 +190,24 @@ def _run(*command):
     return result.stdout
 
 
+# hdiutil sometimes answers "Resource temporarily unavailable" while it is
+# busy with another image (seen on CI and on a Mac right after a .dmg was
+# opened); it attaches a moment later.
+ATTACH_TRIES = 5
+ATTACH_WAIT = 2.0
+
+
+def attach(dmg, mount, tries=ATTACH_TRIES, wait=ATTACH_WAIT):
+    for attempt in range(tries):
+        try:
+            _run("hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount, dmg)
+            return
+        except UpdateError as exc:
+            if "temporarily unavailable" not in str(exc) or attempt == tries - 1:
+                raise
+            time.sleep(wait * (attempt + 1))
+
+
 def verify_app(app, version):
     """The app inside the .dmg is this app, at the advertised version, with an
     intact signature."""
@@ -209,7 +227,7 @@ def stage(dmg, version, bundle):
     """Copy the verified app out of the .dmg to a hidden folder beside
     `bundle` (same volume, so the swap is a rename); returns its path."""
     mount = Path(tempfile.mkdtemp(prefix="museum-wallpapers-update-"))
-    _run("hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount, dmg)
+    attach(dmg, mount)
     try:
         apps = sorted(mount.glob("*.app"))
         if len(apps) != 1:
