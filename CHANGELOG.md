@@ -24,6 +24,10 @@ popup card.
   or the Dock change and after waking from sleep.
 - Caption in the style of the plugin's placard: SF Mono italic title, then
   artist, year and museum on one line, clear of the menu bar and Dock.
+- Fast first start: the "known" and "famous" painter lists and their
+  paintings ship with the app, so the first painting appears in about 15 s
+  instead of over a minute. They, and a cache older than a week, are used at
+  once and refreshed from Wikidata in the background.
 - Updates from GitHub releases: checked once a day (or from the menu),
   offered in the card and the menu, installed with one click after checking
   the download's size and SHA-256 digest and the app's bundle identifier,

@@ -18,6 +18,8 @@ from museum_wallpapers.platforms import Monitor  # noqa: E402
 
 # Helper commands never start real processes in tests.
 core.RUNNER = lambda command: None
+# Nor refresh painter lists from Wikidata behind their back.
+core.BACKGROUND = lambda work: None
 
 
 class FakePlatform(platforms.Platform):

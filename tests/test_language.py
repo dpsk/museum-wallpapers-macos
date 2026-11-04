@@ -76,6 +76,7 @@ class DescribeTest(unittest.TestCase):
         self.assertNotIn("inLanguage", query)
         answer = {"results": {"bindings": [{"famed": {"value": "http://www.wikidata.org/entity/Q5582"}}]}}
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(museum, "CACHE", Path(tmp)), \
+                mock.patch.object(museum, "seed", return_value=None), \
                 mock.patch.object(museum, "http_json", return_value=answer) as http:
             self.assertEqual(museum.famous_painters(60), ["Q5582"])
         query = str(http.call_args)

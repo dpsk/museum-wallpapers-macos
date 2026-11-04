@@ -500,12 +500,95 @@ def sparql_query(filters):
     return "\n".join(lines)
 
 
+# The painter lists and their paintings for "known" and "famous" ship with
+# the app (packaging/seed.py makes them), so a first start needs no Wikidata
+# query: the bundled or a week-old list is used at once and refreshed behind.
+SEED_DIR = Path(__file__).resolve().parent / "data"
+_seeds = {}
+_seed_lock = threading.Lock()
+
+
+def seed(min_sitelinks):
+    """{"at", "ids", "items"} bundled for this fame level, or None."""
+    with _seed_lock:
+        if min_sitelinks not in _seeds:
+            try:
+                with gzip.open(SEED_DIR / f"fame-{int(min_sitelinks)}.json.gz", "rt", encoding="utf-8") as f:
+                    data = json.load(f)
+                ok = isinstance(data, dict) and data.get("ids") and isinstance(data.get("items"), list)
+                _seeds[min_sitelinks] = data if ok else None
+            except (OSError, ValueError, EOFError):
+                _seeds[min_sitelinks] = None
+        return _seeds[min_sitelinks]
+
+
+def seed_pool(filters):
+    """The bundled paintings for exactly this filter: no filter but a
+    bundled fame list."""
+    others = any(filters.get(key) for key in ("artists", "movements", "genres"))
+    if others or filters.get("yearFrom") is not None or filters.get("yearTo") is not None:
+        return None
+    for level in FAME.values():
+        data = seed(level) if level else None
+        if data and data["ids"] == filters.get("fameArtists"):
+            return data["items"]
+    return None
+
+
+_refreshing = set()
+_refresh_lock = threading.Lock()
+
+
+def _background(work):
+    threading.Thread(target=work, daemon=True, name="refresh").start()
+
+
+# Tests replace this so nothing reaches the network behind their back.
+BACKGROUND = _background
+
+
+def refresh_later(key, work):
+    """work() once in the background, unless it already runs for this key."""
+    with _refresh_lock:
+        if key in _refreshing:
+            return
+        _refreshing.add(key)
+
+    def run():
+        try:
+            with timed(f"refresh {key}"):
+                work()
+        except Exception as exc:  # noqa: BLE001 - the old data stays; tried again on a later pick
+            print(f"museum-wallpapers: could not refresh {key}: {exc}", file=sys.stderr)
+        finally:
+            with _refresh_lock:
+                _refreshing.discard(key)
+
+    BACKGROUND(run)
+
+
+def fresh(cached):
+    return isinstance(cached, dict) and time.time() - cached.get("at", 0) < POOL_MAX_AGE
+
+
 def famous_painters(min_sitelinks):
-    """Painters with articles in at least this many Wikipedias, cached a week."""
+    """Painters with articles in at least this many Wikipedias, cached a week;
+    an older or the bundled list is answered at once and refreshed behind."""
     path = CACHE / "pools" / f"painters-{min_sitelinks}.json"
     cached = read_json(path)
-    if isinstance(cached, dict) and time.time() - cached.get("at", 0) < POOL_MAX_AGE:
+    if fresh(cached) and cached.get("ids"):
         return cached["ids"]
+    old = cached.get("ids") if isinstance(cached, dict) else None
+    old = old or (seed(min_sitelinks) or {}).get("ids")
+    if old:
+        refresh_later(f"painters-{min_sitelinks}", lambda: _refresh_painters(min_sitelinks, path))
+        return old
+    ids = _query_painters(min_sitelinks)
+    write_json(path, {"at": time.time(), "ids": ids})
+    return ids
+
+
+def _query_painters(min_sitelinks):
     query = (f"SELECT ?famed WHERE {{ ?famed wdt:P106 wd:{PAINTER}; wikibase:sitelinks ?links. "
              f"FILTER(?links >= {int(min_sitelinks)}) }}")
     data = http_json(SPARQL_API, data={"query": query}, accept="application/sparql-results+json", timeout=90)
@@ -514,8 +597,18 @@ def famous_painters(min_sitelinks):
     if not ids:
         # Never cache this: an empty list would quietly turn `fame` off for a week.
         raise ValueError("Wikidata returned no painters")
-    write_json(path, {"at": time.time(), "ids": ids})
     return ids
+
+
+def _refresh_painters(min_sitelinks, path):
+    """A new painter list means a new pool: fetch that first, so the switch to
+    the new list never waits for Wikidata."""
+    ids = _query_painters(min_sitelinks)
+    filters = dict(normalize_filters({}), fameArtists=ids)
+    pool = CACHE / "pools" / f"{filter_key(filters)}.json"
+    if not fresh(read_json(pool)):
+        _pools[pool] = _query_pool(pool, filters)
+    write_json(path, {"at": time.time(), "ids": ids})
 
 
 def file_title_from_url(url):
@@ -538,8 +631,19 @@ def entity_pool(filters):
 
 def _load_pool(path, filters):
     pool = read_json(path)
-    if isinstance(pool, dict) and time.time() - pool.get("at", 0) < POOL_MAX_AGE:
+    if fresh(pool) and isinstance(pool.get("items"), list):
         return pool["items"]
+    old = pool.get("items") if isinstance(pool, dict) and isinstance(pool.get("items"), list) else None
+    old = old if old is not None else seed_pool(filters)
+    if old is not None:
+        def refresh():
+            _pools[path] = _query_pool(path, filters)
+        refresh_later(path.stem, refresh)
+        return old
+    return _query_pool(path, filters)
+
+
+def _query_pool(path, filters):
     data = http_json(SPARQL_API, data={"query": sparql_query(filters)},
                      accept="application/sparql-results+json", timeout=90)
     items = []

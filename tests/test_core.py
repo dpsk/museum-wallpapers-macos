@@ -238,6 +238,7 @@ class EdgeCaseTest(unittest.TestCase):
 
     def test_an_empty_painter_list_is_not_cached(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp, mock.patch.object(museum, "CACHE", Path(tmp)), \
+             mock.patch.object(museum, "seed", return_value=None), \
              mock.patch.object(museum, "http_json", return_value={"results": {"bindings": []}}):
             with self.assertRaises(ValueError):
                 museum.famous_painters(60)
@@ -800,6 +801,82 @@ class SwitchTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             museum.cmd_filter(self.config, args)
         self.assertTrue(part.exists())
+
+
+class SeedTest(unittest.TestCase):
+    """The bundled painter lists: a first start or a week-old cache never
+    waits for Wikidata; the refresh runs behind."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.cache = Path(self.tmp.name)
+        self.jobs = []
+        bundled = {"at": 0, "ids": ["Q1", "Q2"], "items": [["Q10", "File:A.jpg"], ["Q11", "File:B.jpg"]]}
+        for patch in (mock.patch.object(museum, "CACHE", self.cache),
+                      mock.patch.object(museum, "seed", side_effect=lambda level: bundled if level == 60 else None),
+                      mock.patch.object(museum, "BACKGROUND", self.jobs.append),
+                      mock.patch.dict(museum._pools, clear=True),
+                      mock.patch.object(museum, "_refreshing", set())):
+            patch.start()
+        self.addCleanup(mock.patch.stopall)
+        self.addCleanup(self.tmp.cleanup)
+
+    @staticmethod
+    def answer(query_kw):
+        query = query_kw["data"]["query"]
+        if "sitelinks" in query:
+            return {"results": {"bindings": [{"famed": {"value": "http://www.wikidata.org/entity/Q3"}}]}}
+        return {"results": {"bindings": [{"p": {"value": "http://www.wikidata.org/entity/Q30"},
+                                          "img": {"value": "http://commons.wikimedia.org/wiki/Special:FilePath/C.jpg"}}]}}
+
+    def famous_filters(self):
+        return dict(museum.normalize_filters({}), fameArtists=museum.famous_painters(60))
+
+    def test_first_start_uses_the_bundled_lists_without_the_network(self):
+        with mock.patch.object(museum, "http_json", side_effect=AssertionError("no network")):
+            self.assertEqual(museum.famous_painters(60), ["Q1", "Q2"])
+            self.assertEqual(museum.entity_pool(self.famous_filters()), [["Q10", "File:A.jpg"], ["Q11", "File:B.jpg"]])
+        self.assertEqual(len(self.jobs), 2)  # painters and pool refresh, once each
+        museum.famous_painters(60)
+        self.assertEqual(len(self.jobs), 2)
+
+    def test_the_refresh_brings_the_new_list_and_its_pool_together(self):
+        museum.famous_painters(60)
+        with mock.patch.object(museum, "http_json", side_effect=lambda *_a, **kw: self.answer(kw)) as http:
+            self.jobs[0]()
+            self.assertEqual(http.call_count, 2)
+            self.assertEqual(museum.famous_painters(60), ["Q3"])
+            self.assertEqual(museum.entity_pool(self.famous_filters()), [["Q30", "File:C.jpg"]])
+            self.assertEqual(http.call_count, 2)  # the new pool was ready before the new list
+
+    def test_a_stale_cache_is_used_while_it_refreshes(self):
+        museum.write_json(self.cache / "pools" / "painters-60.json", {"at": 0, "ids": ["Q5"]})
+        with mock.patch.object(museum, "http_json", side_effect=AssertionError("no network")):
+            self.assertEqual(museum.famous_painters(60), ["Q5"])
+        self.assertEqual(len(self.jobs), 1)
+
+    def test_a_filter_with_nothing_bundled_still_asks_wikidata(self):
+        filters = museum.normalize_filters({"artists": ["Q296"]})
+        with mock.patch.object(museum, "http_json", side_effect=lambda *_a, **kw: self.answer(kw)):
+            self.assertEqual(museum.entity_pool(filters), [["Q30", "File:C.jpg"]])
+        self.assertEqual(self.jobs, [])
+
+    def test_a_failed_refresh_keeps_the_old_list_and_is_retried(self):
+        museum.famous_painters(60)
+        with mock.patch.object(museum, "http_json", side_effect=OSError("offline")):
+            self.jobs[0]()
+        self.assertEqual(museum.famous_painters(60), ["Q1", "Q2"])
+        self.assertEqual(len(self.jobs), 2)
+
+
+class BundledSeedTest(unittest.TestCase):
+    def test_the_bundled_files_are_valid(self):
+        museum._seeds.clear()
+        for level in (30, 60):
+            data = museum.seed(level)
+            self.assertGreater(len(data["ids"]), 100)
+            self.assertGreater(len(data["items"]), 10000)
+            self.assertTrue(all(qid.startswith("Q") and title.startswith("File:") for qid, title in data["items"][:50]))
 
 
 if __name__ == "__main__":

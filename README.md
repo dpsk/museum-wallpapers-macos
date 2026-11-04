@@ -55,9 +55,9 @@ The app is not notarized by Apple, so the first start needs one extra step:
 
 Or, in Terminal: `xattr -dr com.apple.quarantine "/Applications/Museum Wallpapers.app"`.
 
-A frame icon appears in the menu bar and the first painting follows within a
-minute (the very first start fetches the painter list from Wikidata, which
-can take up to a minute). Requires macOS 13 Ventura or later and an internet
+A frame icon appears in the menu bar and the first painting follows within
+about 15 seconds (the painter lists ship with the app and are refreshed from
+Wikidata in the background). Requires macOS 13 Ventura or later and an internet
 connection to Wikimedia.
 
 ## Using it

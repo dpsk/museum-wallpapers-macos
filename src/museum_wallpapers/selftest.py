@@ -68,6 +68,7 @@ def run(out=None):
     check("menu_bar_icon", lambda: resources.menu_bar_icon().size)
     check("updater", lambda: {"arch": updater.arch_name(), "bundle": str(updater.bundle_path()),
                               "cannot_install": updater.cannot_install(updater.bundle_path())}, required=False)
+    check("seed", lambda: {level: len((core.seed(level) or {})["items"]) for level in core.FAME.values() if level})
     check("card", lambda: len(card.page(card.data(core.load_config(), {"active": False}))))
 
     text = json.dumps(report, ensure_ascii=False, indent=2)

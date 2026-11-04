@@ -25,6 +25,8 @@ a = Analysis(
     [str(HERE / "launcher.py")],
     pathex=[str(ROOT / "src")],
     hiddenimports=hiddenimports,
+    # The bundled painter lists (packaging/seed.py).
+    datas=[(str(ROOT / "src" / "museum_wallpapers" / "data"), "museum_wallpapers/data")],
     excludes=["pytest", "tkinter"],
     noarchive=False,
 )

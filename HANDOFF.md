@@ -143,7 +143,11 @@ Fix what this finds, run the tests, push.
 
 ### 6. Release 0.1.0
 
+Refresh the bundled painter lists first (about a minute; commit if they
+changed):
+
 ```bash
+.venv/bin/python packaging/seed.py && git add src/museum_wallpapers/data && git commit -m "data: painter lists"
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
@@ -217,5 +221,9 @@ API; if a release lacks it, only the size is checked. Bundle id, version and
   switches to Regular.
 - **macOS redraws a wallpaper only when its path changes,** so the language
   is part of a framed copy's file name (`…bottom-right-ru…`).
-- **The first start is slow** (about a minute here): the painter list query to
-  Wikidata. Later starts use the weekly cache.
+- **The first start used to be slow** (77 s): two Wikidata queries, the painter
+  list and its 38k paintings. They now ship in `src/museum_wallpapers/data`
+  (`packaging/seed.py`), answered at once and refreshed behind (`refresh_later`
+  in core.py); first painting in ~15 s. The same code ports to Windows as is.
+- **macOS 26 reports a new wallpaper a second or two after it was set.** The
+  cleanup after a switch used to delete the framed copy it had just set.
