@@ -5,6 +5,7 @@ MUSEUM_WALLPAPERS_LIVE_WALLPAPER=1 (CI does it on its runner)."""
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -116,7 +117,15 @@ class MacPlatformTest(unittest.TestCase):
                     images[monitor.id] = make_jpeg(Path(tmp) / f"live-{monitor.id}.jpg",
                                                    size=(monitor.width // 4, monitor.height // 4))
                 self.platform.set_wallpaper(images)
-                shown = self.platform.wallpapers()
+                # While macOS settles, reads answer with what was set; then ask macOS itself.
+                self.assertEqual(self.platform.wallpapers(), {k: str(Path(v).resolve()) for k, v in images.items()})
+                self.platform._set_at = float("-inf")
+                deadline, shown = time.monotonic() + 10, {}
+                while time.monotonic() < deadline:
+                    shown = self.platform.wallpapers()
+                    if all(os.path.realpath(shown.get(k) or "/") == os.path.realpath(v) for k, v in images.items()):
+                        break
+                    time.sleep(0.5)
                 print("wallpapers after:", shown)
                 for key, path in images.items():
                     self.assertEqual(os.path.realpath(shown[key]), os.path.realpath(path))

@@ -568,6 +568,16 @@ class SwitchTest(unittest.TestCase):
         self.assertEqual(len(list((self.cache / "display").glob("commons-5.*.jpg"))), 2)
         self.assertFalse(old.exists())
 
+    def test_prune_keeps_what_was_just_set_while_the_os_still_reports_the_old_wallpaper(self):
+        # macOS 26 reports a new wallpaper a moment after it was set.
+        painting = make_jpeg(self.cache / "commons-5.jpg")
+        config = museum.normalize_config({"fit": "blur", "caption": "off", "saveDir": self.config["saveDir"]})
+        museum.record(museum.show(painting, config), original=painting, config=config)
+        self.platform.current = make_jpeg(self.cache / "elsewhere" / "default.jpg")
+        museum.prune(config)
+        self.assertEqual(len(list((self.cache / "display").glob("commons-5.*.jpg"))), 1)
+        self.assertTrue(painting.exists())
+
     def test_monitor_change_reframes(self):
         painting = make_jpeg(self.cache / "commons-5.jpg")
         config = museum.normalize_config({"fit": "blur", "caption": "off", "saveDir": self.config["saveDir"]})

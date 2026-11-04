@@ -35,6 +35,9 @@ UN_PRESENT_BANNER = 1 << 4
 UN_ACTION_FOREGROUND = 1 << 2
 NOTIFICATION_CATEGORY = "painting"
 LOGIN_SECONDS = 180  # a start this soon after boot is a start at login
+# macOS 26 reports a new wallpaper a second or two after it was set; until
+# then reads answer with what was just set (or a cleanup would delete it).
+SETTLE_SECONDS = 10
 
 
 def on_main(work, timeout=20):
@@ -207,6 +210,10 @@ class MacPlatform(Platform):
             return applied
 
         self.last_images = on_main(apply)
+        self._set_at = time.monotonic()
+
+    def _settling(self):
+        return bool(self.last_images) and time.monotonic() - getattr(self, "_set_at", -SETTLE_SECONDS) < SETTLE_SECONDS
 
     def current_wallpaper(self):
         def read():
@@ -214,7 +221,10 @@ class MacPlatform(Platform):
             found = _screens()
             if not found:
                 return None
-            url = NSWorkspace.sharedWorkspace().desktopImageURLForScreen_(_biggest(found)[1])
+            key, screen, _monitor = _biggest(found)
+            if self._settling() and key in self.last_images:
+                return self.last_images[key]
+            url = NSWorkspace.sharedWorkspace().desktopImageURLForScreen_(screen)
             return url.path() if url is not None and url.isFileURL() else None
 
         path = on_main(read)
@@ -224,8 +234,11 @@ class MacPlatform(Platform):
         """{screen id: path} as macOS shows them on the current Space."""
         def read():
             from AppKit import NSWorkspace
-            workspace, result = NSWorkspace.sharedWorkspace(), {}
+            workspace, result, settling = NSWorkspace.sharedWorkspace(), {}, self._settling()
             for key, screen, _monitor in _screens():
+                if settling and key in self.last_images:
+                    result[key] = self.last_images[key]
+                    continue
                 url = workspace.desktopImageURLForScreen_(screen)
                 result[key] = url.path() if url is not None and url.isFileURL() else ""
             return result

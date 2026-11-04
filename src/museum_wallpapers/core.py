@@ -1172,6 +1172,10 @@ def prune(config):
     # Framed copies of the painting on screen stay (one per monitor size);
     # a failed delete is retried later.
     keep = {current.stem} if current else set()
+    # And what was set last, whatever the platform reports right now (macOS
+    # reports a new wallpaper only after a moment).
+    state = read_json(STATE / "state.json", {})
+    keep |= {Path(state[k]).name.split(".")[0] for k in ("image", "original") if state.get(k)}
     keep |= {image.stem for image in QUEUE.glob("*.jpg")} if QUEUE.exists() else set()
     for framed in DISPLAY.glob("*.jpg") if DISPLAY.exists() else []:
         if framed != shown and framed.name.split(".")[0] not in keep:
