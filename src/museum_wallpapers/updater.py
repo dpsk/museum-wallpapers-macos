@@ -190,22 +190,23 @@ def _run(*command):
     return result.stdout
 
 
-# hdiutil sometimes answers "Resource temporarily unavailable" while it is
-# busy with another image (seen on CI and on a Mac right after a .dmg was
-# opened); it attaches a moment later.
-ATTACH_TRIES = 5
+# hdiutil sometimes answers "Resource temporarily unavailable" for a while
+# after a .dmg was created or downloaded (seen on CI runners for 20 s and
+# more, and once on a Mac); it attaches later. Tried for up to a minute.
+ATTACH_PATIENCE = 60.0
 ATTACH_WAIT = 2.0
 
 
-def attach(dmg, mount, tries=ATTACH_TRIES, wait=ATTACH_WAIT):
-    for attempt in range(tries):
+def attach(dmg, mount, patience=ATTACH_PATIENCE, wait=ATTACH_WAIT, clock=time.monotonic):
+    deadline = clock() + patience
+    while True:
         try:
             _run("hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount, dmg)
             return
         except UpdateError as exc:
-            if "temporarily unavailable" not in str(exc) or attempt == tries - 1:
+            if "temporarily unavailable" not in str(exc) or clock() + wait > deadline:
                 raise
-            time.sleep(wait * (attempt + 1))
+            time.sleep(wait)
 
 
 def verify_app(app, version):

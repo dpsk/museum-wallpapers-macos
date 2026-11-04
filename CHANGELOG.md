@@ -1,16 +1,16 @@
 # Changelog
 
-## 0.1.3 — 2026-11-04
+## 0.1.4 — 2026-11-04
 
-0.1.2 was tagged but never released (its build failed on the hdiutil
-problem fixed here).
+0.1.2 and 0.1.3 were tagged but never released: their builds failed on the
+hdiutil problem fixed here.
 
 - The .dmg opens as a laid-out window: the app, an arrow to Applications,
   and how to allow the app on its first start (Done, then System Settings →
   Privacy & Security → Open Anyway), with the one-line Terminal install as
   the way around it.
-- Updates retry when `hdiutil` is briefly busy ("Resource temporarily
-  unavailable") instead of failing.
+- Updates wait for up to a minute while `hdiutil` is busy with the
+  downloaded .dmg ("Resource temporarily unavailable") instead of failing.
 
 ## 0.1.1 — 2026-11-04
 
