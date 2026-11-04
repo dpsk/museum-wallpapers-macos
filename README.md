@@ -41,12 +41,24 @@ Website: **[nikaliuk.in](https://nikaliuk.in/)**
 
 ## Install
 
-Download `MuseumWallpapers-<version>-apple-silicon.dmg` (M1 and later) or
+In Terminal, one line:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dpsk/museum-wallpapers-macos/main/install.sh | bash
+```
+
+It downloads the latest release for your Mac, checks it (size, SHA-256, bundle
+id, signature), puts it in Applications and starts it. Installed this way,
+macOS does not ask to allow the app; run the same line again to reinstall.
+[install.sh](install.sh) is short, so read it first if you like.
+
+Or download `MuseumWallpapers-<version>-apple-silicon.dmg` (M1 and later) or
 `MuseumWallpapers-<version>-intel.dmg` from
 [Releases](https://github.com/dpsk/museum-wallpapers-macos/releases), open it
 and drag **Museum Wallpapers** onto **Applications**.
 
-The app is not notarized by Apple, so the first start needs one extra step:
+The app is not notarized by Apple, so a downloaded .dmg needs one extra step
+on the first start:
 
 1. Open **Museum Wallpapers** from Applications. macOS says it cannot verify
    the app; click **Done**.
