@@ -34,9 +34,25 @@ Verified on the work Mac (Apple silicon, macOS 26):
 - The real 0.1.0 .dmg goes through the updater's staging (mount, verify,
   copy) cleanly.
 
-Not verified yet (needs a Mac whose wallpaper you may change):
+On the personal Mac (M1 Pro, macOS 26.5.2, one display), 2026-11-04 evening:
 
-1. Setting the real wallpaper, on several displays and Spaces.
+- 169 tests pass; the live wallpaper round trip passes.
+- Found and fixed: macOS 26 reports a new wallpaper only a moment after it is
+  set, so the cleanup deleted the framed copy it had just set and the desktop
+  stayed default.
+- Bundled painter lists: a wiped install shows its first painting in 15 s
+  (was 77 s); both refreshes finish in the background.
+- Blocked: `gh repo edit --visibility public` answers HTTP 422 "A previous
+  repository operation is still in progress" for 35+ minutes (try the web UI:
+  Settings → General → Change visibility). The workflow stays in
+  `ci/build.yml` until the repository is public, so a run does not cost
+  macOS minutes at 10x.
+- SSH pushes fail from this Mac (`Permission denied (publickey)`); HTTPS
+  through `gh auth git-credential` works.
+
+Not verified yet:
+
+1. The real wallpaper on several displays and Spaces (one display works).
 2. Notifications from the bundled app (permission prompt, banner, the Read
    more button, clicking the notification).
 3. Open at login through SMAppService for an ad-hoc signed app (macOS may
