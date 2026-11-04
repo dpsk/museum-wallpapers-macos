@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 — 2026-11-04
+
+- Fixed: the released 0.1.0 could not reach Wikimedia or GitHub
+  (`CERTIFICATE_VERIFY_FAILED`), so it showed no painting and could not check
+  for updates. HTTPS is now verified with the macOS Keychain. 0.1.0 cannot
+  update itself to this version: download it again, or install with
+  `curl -fsSL https://raw.githubusercontent.com/dpsk/museum-wallpapers-macos/main/install.sh | bash`.
+- Install with that one line in Terminal, without the Open Anyway step.
+
 ## 0.1.0 — 2026-11-04
 
 First macOS version, built on the core of museum-wallpapers-windows 0.1.2 (its
