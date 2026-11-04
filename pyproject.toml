@@ -13,6 +13,7 @@ requires-python = ">=3.10"
 dependencies = [
     "Pillow>=10.1",
     "fonttools>=4.40",
+    "truststore>=0.9",
     "pyobjc-core>=10.3; sys_platform == 'darwin'",
     "pyobjc-framework-Cocoa>=10.3; sys_platform == 'darwin'",
     "pyobjc-framework-WebKit>=10.3; sys_platform == 'darwin'",

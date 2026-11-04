@@ -4,7 +4,20 @@
 import sys
 
 
+def use_system_trust():
+    """Verify HTTPS certificates with the operating system's trust store (the
+    macOS Keychain). The bundled OpenSSL looks for a CA file the Python that
+    built the app had and a user's Mac does not: every request failed with
+    CERTIFICATE_VERIFY_FAILED."""
+    try:
+        import truststore
+        truststore.inject_into_ssl()
+    except Exception as exc:  # noqa: BLE001 - OpenSSL's own paths stay
+        print(f"museum-wallpapers: system trust store unavailable: {exc}", file=sys.stderr)
+
+
 def main(argv=None):
+    use_system_trust()
     argv = [a for a in (sys.argv[1:] if argv is None else argv) if not a.startswith("-psn_")]
     if not argv or argv[0] in ("app", "--background"):
         from . import app

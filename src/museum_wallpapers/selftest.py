@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import VERSION
 
-REQUIRED = ["PIL.Image", "PIL.ImageFilter", "fontTools.ttLib", "fontTools.ttLib.tables._c_m_a_p"]
+REQUIRED = ["PIL.Image", "PIL.ImageFilter", "fontTools.ttLib", "fontTools.ttLib.tables._c_m_a_p", "truststore"]
 MAC_REQUIRED = ["objc", "Foundation", "AppKit", "WebKit", "UserNotifications", "ServiceManagement",
                 "PyObjCTools.AppHelper", "museum_wallpapers.macui"]
 
@@ -69,6 +69,9 @@ def run(out=None):
     check("updater", lambda: {"arch": updater.arch_name(), "bundle": str(updater.bundle_path()),
                               "cannot_install": updater.cannot_install(updater.bundle_path())}, required=False)
     check("seed", lambda: {level: len((core.seed(level) or {})["items"]) for level in core.FAME.values() if level})
+    # A real request: a bundle whose Python cannot verify certificates
+    # fails here rather than on a user's Mac.
+    check("https", lambda: sorted(core.mw_api(core.COMMONS_API, action="query", meta="siteinfo")["query"])[:1])
     check("card", lambda: len(card.page(card.data(core.load_config(), {"active": False}))))
 
     text = json.dumps(report, ensure_ascii=False, indent=2)

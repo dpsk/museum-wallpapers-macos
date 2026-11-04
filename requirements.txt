@@ -1,6 +1,7 @@
 # Runtime (pinned for reproducible builds; pyproject.toml has the ranges)
 Pillow==13.0.0
 fonttools==4.68.0
+truststore==0.10.5
 pyobjc-core==13.0; sys_platform == "darwin"
 pyobjc-framework-Cocoa==13.0; sys_platform == "darwin"
 pyobjc-framework-WebKit==13.0; sys_platform == "darwin"
