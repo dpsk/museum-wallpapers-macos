@@ -1,0 +1,449 @@
+"""The menu bar app's logic: what the status item, its card and its menu show,
+what their buttons do, and a scheduler thread that does what the Omarchy
+plugin's minute tick did. The AppKit side (status item, popover, menu) lives
+in macui.py and calls in here; this module needs no AppKit, so it is tested
+on any OS with a stand-in view."""
+
+import argparse
+import datetime
+import sys
+import threading
+import time
+import traceback
+from pathlib import Path
+from typing import NamedTuple
+
+from . import APP_NAME, BUNDLE_ID, VERSION, card, core, filelock, strings, updater
+
+TICK_SECONDS = 60
+FIRST_UPDATE_CHECK = 30  # seconds after start, not to slow the first painting
+LOG_LIMIT = 1_000_000
+SHOW_NOTIFICATION = f"{BUNDLE_ID}.show"  # a second launch asks the running app to open its card
+
+
+class TimestampedLog:
+    """stderr for an app without a terminal: a log file."""
+
+    def __init__(self, path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if path.exists() and path.stat().st_size > LOG_LIMIT:
+                path.replace(path.with_suffix(".old.log"))
+        except OSError:
+            pass
+        self._file = open(path, "a", encoding="utf-8", buffering=1)
+        self._lock = threading.Lock()
+
+    def write(self, text):
+        if not text.strip():
+            return len(text)
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self._lock:
+            for line in text.rstrip("\n").splitlines():
+                self._file.write(f"{stamp} {line}\n")
+        return len(text)
+
+    def flush(self):
+        self._file.flush()
+
+
+class MenuItem(NamedTuple):
+    """One entry of the status item's menu; `submenu` is a list of MenuItems."""
+
+    title: str = ""
+    action: object = None
+    checked: bool = False
+    enabled: bool = True
+    submenu: object = None
+    separator: bool = False
+
+
+SEPARATOR = MenuItem(separator=True)
+
+
+class NullView:
+    """What the app shows on screen; macui.MacView is the real one. Every
+    method may be called from any thread."""
+
+    card_open = False
+
+    def update_status(self, tooltip, active, busy):
+        pass
+
+    def show_card(self, data):
+        pass
+
+    def update_card(self, data):
+        pass
+
+    def quit(self):
+        pass
+
+
+class App:
+    def __init__(self, background=False, view=None):
+        self.background = background
+        self.platform = core.PLATFORM
+        self.view = view or NullView()
+        self.stop = threading.Event()
+        self.wake = threading.Event()
+        self.switching = threading.Lock()
+        self.instance = None
+        self.log = None
+        self.update = None  # a newer release, from updater.check()
+        self.updating = threading.Lock()
+        self.started_at = None
+
+    # -- start and stop
+
+    def run(self):
+        """Run the menu bar app until it quits."""
+        # One app at a time: a second launch asks the first to open its card.
+        self.instance = filelock.acquire(core.STATE / ".instance.lock", wait=False)
+        if self.instance is None:
+            from . import macui
+            macui.signal_running()
+            return 0
+        self.log = TimestampedLog(self.platform.log_file(core.STATE))
+        if sys.stderr is None or getattr(sys, "frozen", False) or not sys.stderr.isatty():
+            sys.stderr = self.log
+        sys.excepthook = lambda *exc: print("".join(traceback.format_exception(*exc)), file=sys.stderr)
+        threading.excepthook = lambda args: print(
+            "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)), file=sys.stderr)
+        print(f"museum-wallpapers: {APP_NAME} {VERSION} starting on {self.platform.name}"
+              f"{' (app bundle)' if self.platform.packaged else ''}", file=sys.stderr)
+        from . import macui
+        return macui.run(self)
+
+    def started(self):
+        """Called once the view is up (on the main thread)."""
+        self.platform.setup()
+        if self.platform.launched_at_startup():
+            self.background = True
+        core.RUNNER = self.run_command
+        self.started_at = time.monotonic()
+        threading.Thread(target=self._scheduler, name="scheduler", daemon=True).start()
+        if not (core.STATE / "state.json").exists():
+            # First run: say where the app lives; the first painting follows within seconds.
+            self._in_background(lambda: core.notify(APP_NAME, strings.t("started", core.load_config())))
+        elif not self.background:
+            # Opened by the user rather than at login: show what is on screen.
+            threading.Timer(1.0, self.about).start()
+        self._in_background(self.refresh)
+
+    def quit(self, *_args):
+        self.stop.set()
+        self.wake.set()
+        self.view.quit()
+
+    # -- background work
+
+    def _scheduler(self):
+        while not self.stop.is_set():
+            self._safely(self.tick)
+            self.wake.wait(TICK_SECONDS)
+            self.wake.clear()
+
+    def tick(self):
+        with self.switching:
+            core.cmd_tick(core.load_config(), None)
+        self.refresh()
+        self._safely(self.check_updates_due)
+
+    # -- updates
+
+    def check_updates_due(self):
+        """The daily check (updater.check() asks GitHub at most once a day)."""
+        if not core.load_config()["checkForUpdates"]:
+            return
+        if self.started_at is not None and time.monotonic() - self.started_at < FIRST_UPDATE_CHECK:
+            return
+        self.check_updates()
+
+    def check_updates(self, manual=False):
+        config = core.load_config()
+        try:
+            found = updater.check(core.STATE, core.http_json, core.read_json, core.write_json, force=manual)
+        except Exception as exc:  # noqa: BLE001 - offline, GitHub rate limit
+            print(f"museum-wallpapers: update check failed: {exc}", file=sys.stderr)
+            if manual:
+                core.notify(APP_NAME, strings.t("update_check_failed", config, error=exc))
+            return
+        changed = (found or {}).get("version") != (self.update or {}).get("version")
+        self.update = found
+        if found and (manual or updater.first_notice(core.STATE, found, core.read_json, core.write_json)):
+            core.notify(APP_NAME, strings.t("update_available", config, version=found["version"]),
+                        actions=[(strings.t("install_update", config), self.install_update)],
+                        on_click=self.about)
+        elif manual and not found:
+            core.notify(APP_NAME, strings.t("up_to_date", config, version=VERSION))
+        if changed:
+            self.refresh()
+
+    def install_update(self, *_args):
+        release = self.update
+        if not release or not self.updating.acquire(blocking=False):
+            return
+        config = core.load_config()
+        bundle = updater.bundle_path()
+        reason = updater.cannot_install(bundle) or ("" if release.get("asset") else "no download for this Mac")
+        if reason:
+            self.updating.release()
+            core.notify(APP_NAME, strings.t("update_manual", config, version=release["version"], reason=reason))
+            self._in_background(lambda: self.platform.open_url(release["page"]))
+            return
+
+        def work():
+            try:
+                self.refresh()
+                dmg = updater.download(release, core.CACHE / "updates", core.USER_AGENT)
+                staged = updater.stage(dmg, release["version"], bundle)
+                dmg.unlink(missing_ok=True)
+                print(f"museum-wallpapers: updating to {release['version']}; restarting", file=sys.stderr)
+                updater.start_swap(bundle, staged)
+            except Exception as exc:  # noqa: BLE001 - the user gets the download page instead
+                print(f"museum-wallpapers: update failed: {exc!r}", file=sys.stderr)
+                self.updating.release()
+                core.notify(APP_NAME, strings.t("update_failed", config, error=exc))
+                self.platform.open_url(release["page"])
+                self.refresh()
+                return
+            self.quit()
+
+        self._in_background(work)
+
+    def run_command(self, command):
+        """core.spawn() lands here: helper commands on threads, not processes."""
+        work = {"prefetch": core.cmd_prefetch, "notify": core.cmd_notify}.get(command)
+        if work:
+            threading.Thread(target=self._safely, args=(lambda: work(core.load_config(), None),),
+                             name=command, daemon=True).start()
+
+    @staticmethod
+    def _safely(work):
+        try:
+            work()
+        except Exception:  # noqa: BLE001 - logged; the app keeps running
+            print("museum-wallpapers: " + traceback.format_exc(), file=sys.stderr)
+
+    def _in_background(self, work):
+        threading.Thread(target=self._safely, args=(work,), daemon=True).start()
+
+    # -- what macOS tells the app
+
+    def space_changed(self):
+        """Another Space (virtual desktop) came up: macOS keeps a wallpaper
+        per Space, so give this one the painting too."""
+        self._in_background(self.reapply)
+
+    def reapply(self):
+        if not self.switching.acquire(blocking=False):
+            return  # a switch is running and will set every screen anyway
+        try:
+            state = core.read_json(core.STATE / "state.json", {})
+            original = Path(state.get("original") or "/nonexistent")
+            if not original.exists():
+                return
+            last = getattr(self.platform, "last_images", None) or {}
+            shown = self.platform.wallpapers() if hasattr(self.platform, "wallpapers") else {}
+            if last and all(shown.get(key) == path for key, path in last.items() if key in shown):
+                return
+            config = core.load_config()
+            if last and all(Path(path).exists() for path in last.values()) and not core.needs_refit(state, config):
+                self.platform.set_wallpaper(last)
+            else:
+                core.show(original, config)
+        finally:
+            self.switching.release()
+
+    def screens_changed(self):
+        """A screen plugged in or out, a resolution or the Dock changed:
+        re-frame now rather than at the next minute."""
+        self.wake.set()
+
+    def woke(self):
+        self.wake.set()
+
+    # -- actions
+
+    def next(self, *_args):
+        if not self.switching.acquire(blocking=False):
+            return  # a switch is already running; presses meanwhile are ignored
+        self.refresh_status()
+
+        def work():
+            try:
+                core.cmd_next(core.load_config(), None)
+            finally:
+                self.switching.release()
+            self.refresh()
+
+        self._in_background(work)
+        self._in_background(self.refresh)
+
+    def read_more(self, *_args):
+        self._in_background(lambda: core.cmd_open(core.load_config(), None))
+
+    def save(self, *_args):
+        self._in_background(lambda: core.cmd_keep(core.load_config(), None))
+
+    def about(self, *_args):
+        self.view.show_card(self.card_data())
+
+    def _filter(self, action, **values):
+        args = argparse.Namespace(action=action, artist=None, movement=None, genre=None, years=None, label=None,
+                                  switch=True)
+        for key, value in values.items():
+            setattr(args, key, value)
+        if not self.switching.acquire(blocking=False):
+            return
+
+        def work():
+            try:
+                core.cmd_filter(core.load_config(), args)
+            finally:
+                self.switching.release()
+            self.refresh()
+
+        self._in_background(work)
+        self._in_background(self.refresh)
+
+    def more_by(self, qid, name):
+        self._filter("set", artist=[qid], label=name)
+
+    def more_of(self, qid, name):
+        self._filter("set", movement=[qid], label=name)
+
+    def show_all(self, *_args):
+        self._filter("clear")
+
+    def set_setting(self, key, value):
+        core.save_setting(key, value)
+        self._in_background(self.refresh)
+        self.wake.set()  # re-frame or switch now, not in a minute
+
+    def autostart(self):
+        try:
+            return bool(self.platform.autostart_enabled())
+        except Exception:  # noqa: BLE001
+            return False
+
+    def toggle_autostart(self, *_args):
+        wanted = not self.autostart()
+        try:
+            done = self.platform.set_autostart(wanted)
+        except Exception as exc:  # noqa: BLE001
+            print(f"museum-wallpapers: open at login: {exc}", file=sys.stderr)
+            done = False
+        if wanted and done is False:
+            core.notify(APP_NAME, strings.t("autostart_blocked", core.load_config()))
+
+    def open_collection(self, *_args):
+        self._in_background(lambda: self.platform.open_folder(core.load_config()["saveDir"]))
+
+    def card_action(self, name, args):
+        """A button in the card: `name` and its arguments, as card.js posts them."""
+        args = list(args or [])
+        actions = {
+            "next": self.next,
+            "open": self.read_more,
+            "save": self.save,
+            "more_by": lambda: self.more_by(str(args[0]), str(args[1])),
+            "more_of": lambda: self.more_of(str(args[0]), str(args[1])),
+            "show_all": self.show_all,
+            "set": lambda: self.set_setting(*card.setting(args)),
+            "update": self.install_update,
+        }
+        work = actions.get(name)
+        if work:
+            work()
+
+    # -- what the status item, card and menu show
+
+    def current(self):
+        config = core.load_config()
+        return config, core.status(config)
+
+    def tooltip(self, status):
+        info = status.get("info")
+        if info and info.get("title"):
+            text = " — ".join(x for x in (info["title"], info.get("artist")) if x)
+            return text if len(text) <= 120 else text[:119] + "…"
+        return APP_NAME
+
+    def refresh_status(self):
+        config, status = self.current()
+        self.view.update_status(self.tooltip(status), bool(status.get("active")), self.switching.locked())
+
+    def refresh(self):
+        """Status item and an open card after anything changed."""
+        config, status = self.current()
+        self.view.update_status(self.tooltip(status), bool(status.get("active")), self.switching.locked())
+        if self.view.card_open:
+            self.view.update_card(self.card_data(config, status))
+
+    def card_data(self, config=None, status=None):
+        if config is None:
+            config, status = self.current()
+        return card.data(config, status, busy=self.switching.locked(), update=self.update,
+                         updating=self.updating.locked())
+
+    def menu(self):
+        """The status item's menu (right click), built fresh each time it opens."""
+        config, status = self.current()
+        t = lambda key, **values: strings.t(key, config, **values)  # noqa: E731
+        has_painting = bool(status.get("active"))
+
+        def choice(key, value, title, current=None):
+            current = config.get(key) if current is None else current
+            return MenuItem(title, lambda: self.set_setting(key, value), checked=current == value)
+
+        languages = [choice("language", "auto", t("lang_auto"), config["languageSetting"])]
+        languages += [choice("language", code, strings.LANGUAGE_NAMES[code], config["languageSetting"])
+                      for code in core.LANGUAGES[1:]]
+        items = [
+            MenuItem(t("about"), self.about),
+            MenuItem(t("next"), self.next, enabled=not self.switching.locked()),
+            MenuItem(t("read_more"), self.read_more, enabled=has_painting),
+            MenuItem(t("save"), self.save, enabled=has_painting and bool(status.get("fromCache"))),
+            SEPARATOR,
+        ]
+        override = status.get("filter")
+        if override:
+            items += [MenuItem(t("showing_only", name=card.filter_label(override)), enabled=False),
+                      MenuItem(t("show_all"), self.show_all), SEPARATOR]
+        items += [
+            MenuItem(t("change_every"), submenu=[choice("intervalMinutes", m, strings.interval_label(m, config))
+                                                 for m in core.INTERVALS]),
+            MenuItem(t("artists"), submenu=[choice("fame", f, t(f"fame_{f}")) for f in ("famous", "known", "any")]),
+            MenuItem(t("fit"), submenu=[choice("fit", f, t(f"fit_{f}")) for f in ("blur", "auto", "wall", "cover")]),
+            MenuItem(t("caption"), submenu=[choice("caption", c, t(f"caption_{c}"))
+                                            for c in ("off", "bottom-right", "bottom-left", "top-right", "top-left")]),
+            MenuItem(t("language"), submenu=languages),
+            MenuItem(t("notify_on_change"), lambda: self.set_setting("notifyOnChange", not config["notifyOnChange"]),
+                     checked=config["notifyOnChange"]),
+            MenuItem(t("start_at_login"), self.toggle_autostart, checked=self.autostart()),
+            MenuItem(t("open_collection"), self.open_collection),
+            SEPARATOR,
+        ]
+        if self.update:
+            items.append(MenuItem(t("install_update_menu", version=self.update["version"]), self.install_update,
+                                  enabled=not self.updating.locked()))
+        items += [
+            MenuItem(t("check_updates"), lambda: self._in_background(lambda: self.check_updates(manual=True))),
+            MenuItem(t("check_updates_auto"), lambda: self.set_setting("checkForUpdates",
+                                                                       not config["checkForUpdates"]),
+                     checked=config["checkForUpdates"]),
+            SEPARATOR,
+            MenuItem(t("quit"), self.quit),
+        ]
+        return items
+
+
+def main(background=False):
+    return App(background=background).run()
+
+
+if __name__ == "__main__":
+    sys.exit(main("--background" in sys.argv))

@@ -42,11 +42,9 @@ On the personal Mac (M1 Pro, macOS 26.5.2, one display), 2026-11-04 evening:
   stayed default.
 - Bundled painter lists: a wiped install shows its first painting in 15 s
   (was 77 s); both refreshes finish in the background.
-- Blocked: `gh repo edit --visibility public` answers HTTP 422 "A previous
-  repository operation is still in progress" for 35+ minutes (try the web UI:
-  Settings → General → Change visibility). The workflow stays in
-  `ci/build.yml` until the repository is public, so a run does not cost
-  macOS minutes at 10x.
+- GitHub refused to make the private repository public (HTTP 422 "A previous
+  repository operation is still in progress" for 35+ minutes), so it was
+  deleted and created again as public; the CI workflow is in place.
 - SSH pushes fail from this Mac (`Permission denied (publickey)`); HTTPS
   through `gh auth git-credential` works.
 
@@ -70,32 +68,6 @@ git clone git@github.com:dpsk/museum-wallpapers-macos.git && cd museum-wallpaper
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest -q          # expect 162 passed, 1 skipped (~45 s: the updater tests mount .dmg files)
 ```
-
-### 2. Put the CI workflow in place
-
-GitHub refused the workflow from the work Mac (the `gh` token lacked the
-`workflow` scope), so it is parked in `ci/build.yml`. Move it and push from a
-machine whose git credentials may change workflows (an SSH key, or
-`gh auth refresh -h github.com -s workflow`):
-
-```bash
-mkdir -p .github/workflows
-git mv ci/build.yml .github/workflows/build.yml
-git commit -m "ci: [macOS] tests on Linux and macOS, .dmg builds and releases"
-git push
-```
-
-Then delete this step from the handoff.
-
-### 3. Make the repository public
-
-```bash
-gh repo edit dpsk/museum-wallpapers-macos --visibility public --accept-visibility-change-consequences
-```
-
-Needed for the updater (GitHub's release API answers 404 for a private
-repository without credentials, and the app sends none) and for free macOS
-runner minutes (private repositories pay macOS minutes at 10x).
 
 ### 4. Watch the first CI run
 
