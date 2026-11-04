@@ -95,6 +95,8 @@ DEFAULTS = {
     "language": "auto",
     "filters": {"yearFrom": None, "yearTo": None, "artists": [], "movements": [], "genres": []},
     "notifyOnChange": False,
+    # Ask GitHub once a day whether a newer version of the app is out.
+    "checkForUpdates": True,
     # The museum label drawn into the wallpaper (the plugin's desktop placard).
     "caption": "bottom-right",
     "saveDir": str(Path(_PATHS["pictures"]) / "Museum Wallpapers"),
@@ -214,6 +216,7 @@ def normalize_config(entry):
     config["languageSetting"] = language
     config["language"] = PLATFORM.ui_language() if language == "auto" else language
     config["notifyOnChange"] = config["notifyOnChange"] is True
+    config["checkForUpdates"] = config["checkForUpdates"] is not False
     if not isinstance(config["caption"], str) or config["caption"] not in CAPTIONS:
         config["caption"] = DEFAULTS["caption"]
     if not isinstance(config["fit"], str) or config["fit"] not in FITS:

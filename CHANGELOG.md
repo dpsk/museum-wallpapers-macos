@@ -24,6 +24,10 @@ popup card.
   or the Dock change and after waking from sleep.
 - Caption in the style of the plugin's placard: SF Mono italic title, then
   artist, year and museum on one line, clear of the menu bar and Dock.
+- Updates from GitHub releases: checked once a day (or from the menu),
+  offered in the card and the menu, installed with one click after checking
+  the download's size and SHA-256 digest and the app's bundle identifier,
+  version and signature; the app restarts as the new version.
 - Notifications with a Read more button (UserNotifications), Open at login
   (SMAppService), one instance only (opening it again opens the card).
 - Settings in `~/Library/Application Support/MuseumWallpapers`, cache in

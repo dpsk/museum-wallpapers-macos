@@ -24,6 +24,8 @@ Website: **[nikaliuk.in](https://nikaliuk.in/)**
   more**, **Save**, **More by …** / **More Impressionism**, and the settings.
 - **Famous painters first.** By default only the ~280 painters covered by 60+
   Wikipedias; widen it to ~1200 or to everyone.
+- **Updates itself.** A new release is offered in the card and the menu;
+  one click downloads, verifies and installs it, and restarts the app.
 - **English or Russian, switched in the card.** The interface, titles, artists,
   museums and stories follow the language you pick (see
   [Languages](#languages)).
@@ -71,6 +73,23 @@ connection to Wikimedia.
 **Save** copies the painting to `~/Pictures/Museum Wallpapers` with a line in
 `CREDITS.md`; that folder is also what is shown when there is no internet.
 
+## Updates
+
+Once a day the app asks GitHub whether a newer release is out (turn it off
+with **Check for updates automatically** in the menu, or ask any time with
+**Check for Updates…**). When there is one, you get a notification once, and
+the card and the menu offer **Install and restart**, which:
+
+1. downloads the release's `.dmg` for your Mac (Apple silicon or Intel) and
+   checks it against the size and SHA-256 digest GitHub lists for it;
+2. checks that the app inside is Museum Wallpapers, at that version, with an
+   intact signature;
+3. quits, puts the new app in place of the old one and opens it.
+
+Nothing is installed without that click. When the app cannot replace itself
+(it runs straight from the downloaded `.dmg`, or from a folder you cannot
+write to), it opens the release page instead.
+
 ## Languages
 
 The **Language** row of the card switches between **Auto** (the macOS
@@ -107,6 +126,7 @@ also edit by hand.
 | `caption` | `"bottom-right"` | Caption | `off`, `bottom-right`, `bottom-left`, `top-right`, `top-left` |
 | `language` | `"auto"` | Language | Language of the interface and the descriptions; `auto` follows macOS |
 | `notifyOnChange` | `false` | Menu | A notification with the painting each time it changes |
+| `checkForUpdates` | `true` | Menu | Ask GitHub once a day for a newer version |
 | `saveDir` | `~/Pictures/Museum Wallpapers` | Menu: Open collection folder | Where **Save** puts paintings; also the offline fallback |
 | `prefetchCount` | `6` | | Paintings downloaded (and framed) ahead, so **Next** is instant |
 | `cacheSize` | `24` | | Downloaded paintings kept |
@@ -132,9 +152,10 @@ screen stays until you pick another one in System Settings → Wallpaper.
 
 See [PRIVACY.md](PRIVACY.md).
 
-The app talks only to Wikimedia: `commons.wikimedia.org`, `upload.wikimedia.org`,
-`www.wikidata.org`, `query.wikidata.org` and `*.wikipedia.org`. Requests carry
-a User-Agent naming this app and nothing about you.
+The app talks to Wikimedia (`commons.wikimedia.org`, `upload.wikimedia.org`,
+`www.wikidata.org`, `query.wikidata.org` and `*.wikipedia.org`) and, to look
+for updates, to GitHub (`api.github.com`, and `github.com` when downloading
+one). Requests carry a User-Agent naming this app and nothing about you.
 
 The images are photographs of public-domain paintings. Stories are excerpts
 from Wikipedia (CC BY-SA); **Read more** links to the source article.
@@ -178,7 +199,8 @@ Layout:
 | `src/museum_wallpapers/core.py` | Picking, describing, queue, Save, filters, commands (shared with the Windows app and the plugin) |
 | `src/museum_wallpapers/platforms/` | What the OS does: `macos.py` (NSWorkspace wallpaper per screen, NSScreen, notifications, Open at login), `base.py` (interface + dev stand-in) |
 | `src/museum_wallpapers/framing.py` | Blur / wall / fill framing and the caption, with Pillow |
-| `src/museum_wallpapers/app.py` | What the menu bar app does: scheduler, actions, menu (no AppKit, tested anywhere) |
+| `src/museum_wallpapers/app.py` | What the menu bar app does: scheduler, actions, menu, updates (no AppKit, tested anywhere) |
+| `src/museum_wallpapers/updater.py` | Finding, downloading, verifying and installing a newer release |
 | `src/museum_wallpapers/macui.py`, `card.py` | Status item, menu and popover (AppKit); the card page (HTML in a WKWebView) |
 | `packaging/` | PyInstaller spec and the build script (app bundle, ad-hoc signature, self-test, .dmg) |
 | `.github/workflows/build.yml` | Tests on Linux and macOS, builds the Apple silicon and Intel .dmg, attaches them to `v*` releases |

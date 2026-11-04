@@ -100,8 +100,9 @@ def rows(config):
     ]
 
 
-def data(config, status, busy=False):
-    """Everything the card shows, from core.load_config() and core.status()."""
+def data(config, status, busy=False, update=None, updating=False):
+    """Everything the card shows, from core.load_config() and core.status();
+    `update` is a newer release (updater.check()), `updating` while it installs."""
     t = lambda key, **values: strings.t(key, config, **values)  # noqa: E731
     info = status.get("info") if status.get("active") else None
     result = {
@@ -147,6 +148,10 @@ def data(config, status, busy=False):
     override = status.get("filter")
     if override:
         result["filter"] = t("filter", name=filter_label(override))
+    result["update"] = None
+    if update:
+        result["update"] = {"text": t("update_available", version=update["version"]),
+                            "button": t("updating") if updating else t("install_update"), "busy": bool(updating)}
     return result
 
 
@@ -212,6 +217,10 @@ button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke
 .choices button.on { background: var(--on); font-weight: 700; }
 .filter { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; }
 .filter span { flex: 1; }
+.update { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 11px;
+  border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; }
+.update span { flex: 1; }
+.update button { color: var(--accent); font-weight: 700; font-size: 11px; padding: 4px 6px; margin-right: -6px; }
 .footer { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 4px; margin-top: 2px; }
 .footer button { color: var(--dim); font-size: 11px; padding: 4px 6px; margin-right: -6px; }
 </style>
@@ -315,6 +324,15 @@ function render(d) {
     clear.disabled = d.busy;
     filter.append(clear);
     card.append(filter);
+  }
+
+  if (d.update) {
+    const update = el("div", "update");
+    update.append(el("span", null, d.update.text));
+    const install = button(d.update.button, null, () => post("update"));
+    install.disabled = d.update.busy;
+    update.append(install);
+    card.append(update);
   }
 
   const footer = el("div", "footer");

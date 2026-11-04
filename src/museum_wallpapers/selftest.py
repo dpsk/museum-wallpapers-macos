@@ -39,7 +39,7 @@ def run(out=None):
             report["modules"][name] = repr(exc)
             report["ok"] = False
 
-    from . import card, core, framing, resources
+    from . import card, core, framing, resources, updater
     check("platform", lambda: core.PLATFORM.name)
     check("setup", lambda: core.PLATFORM.setup() or "done")
     check("paths", lambda: {k: str(v) for k, v in core.PLATFORM.paths().items()})
@@ -66,6 +66,8 @@ def run(out=None):
     check("framing", frame)
     check("icon", lambda: resources.icon_image(64).size)
     check("menu_bar_icon", lambda: resources.menu_bar_icon().size)
+    check("updater", lambda: {"arch": updater.arch_name(), "bundle": str(updater.bundle_path()),
+                              "cannot_install": updater.cannot_install(updater.bundle_path())}, required=False)
     check("card", lambda: len(card.page(card.data(core.load_config(), {"active": False}))))
 
     text = json.dumps(report, ensure_ascii=False, indent=2)

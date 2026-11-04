@@ -8,13 +8,15 @@ import argparse
 import datetime
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 from typing import NamedTuple
 
-from . import APP_NAME, BUNDLE_ID, VERSION, card, core, filelock, strings
+from . import APP_NAME, BUNDLE_ID, VERSION, card, core, filelock, strings, updater
 
 TICK_SECONDS = 60
+FIRST_UPDATE_CHECK = 30  # seconds after start, not to slow the first painting
 LOG_LIMIT = 1_000_000
 SHOW_NOTIFICATION = f"{BUNDLE_ID}.show"  # a second launch asks the running app to open its card
 
@@ -89,6 +91,9 @@ class App:
         self.switching = threading.Lock()
         self.instance = None
         self.log = None
+        self.update = None  # a newer release, from updater.check()
+        self.updating = threading.Lock()
+        self.started_at = None
 
     # -- start and stop
 
@@ -117,6 +122,7 @@ class App:
         if self.platform.launched_at_startup():
             self.background = True
         core.RUNNER = self.run_command
+        self.started_at = time.monotonic()
         threading.Thread(target=self._scheduler, name="scheduler", daemon=True).start()
         if not (core.STATE / "state.json").exists():
             # First run: say where the app lives; the first painting follows within seconds.
@@ -143,6 +149,69 @@ class App:
         with self.switching:
             core.cmd_tick(core.load_config(), None)
         self.refresh()
+        self._safely(self.check_updates_due)
+
+    # -- updates
+
+    def check_updates_due(self):
+        """The daily check (updater.check() asks GitHub at most once a day)."""
+        if not core.load_config()["checkForUpdates"]:
+            return
+        if self.started_at is not None and time.monotonic() - self.started_at < FIRST_UPDATE_CHECK:
+            return
+        self.check_updates()
+
+    def check_updates(self, manual=False):
+        config = core.load_config()
+        try:
+            found = updater.check(core.STATE, core.http_json, core.read_json, core.write_json, force=manual)
+        except Exception as exc:  # noqa: BLE001 - offline, GitHub rate limit
+            print(f"museum-wallpapers: update check failed: {exc}", file=sys.stderr)
+            if manual:
+                core.notify(APP_NAME, strings.t("update_check_failed", config, error=exc))
+            return
+        changed = (found or {}).get("version") != (self.update or {}).get("version")
+        self.update = found
+        if found and (manual or updater.first_notice(core.STATE, found, core.read_json, core.write_json)):
+            core.notify(APP_NAME, strings.t("update_available", config, version=found["version"]),
+                        actions=[(strings.t("install_update", config), self.install_update)],
+                        on_click=self.about)
+        elif manual and not found:
+            core.notify(APP_NAME, strings.t("up_to_date", config, version=VERSION))
+        if changed:
+            self.refresh()
+
+    def install_update(self, *_args):
+        release = self.update
+        if not release or not self.updating.acquire(blocking=False):
+            return
+        config = core.load_config()
+        bundle = updater.bundle_path()
+        reason = updater.cannot_install(bundle) or ("" if release.get("asset") else "no download for this Mac")
+        if reason:
+            self.updating.release()
+            core.notify(APP_NAME, strings.t("update_manual", config, version=release["version"], reason=reason))
+            self._in_background(lambda: self.platform.open_url(release["page"]))
+            return
+
+        def work():
+            try:
+                self.refresh()
+                dmg = updater.download(release, core.CACHE / "updates", core.USER_AGENT)
+                staged = updater.stage(dmg, release["version"], bundle)
+                dmg.unlink(missing_ok=True)
+                print(f"museum-wallpapers: updating to {release['version']}; restarting", file=sys.stderr)
+                updater.start_swap(bundle, staged)
+            except Exception as exc:  # noqa: BLE001 - the user gets the download page instead
+                print(f"museum-wallpapers: update failed: {exc!r}", file=sys.stderr)
+                self.updating.release()
+                core.notify(APP_NAME, strings.t("update_failed", config, error=exc))
+                self.platform.open_url(release["page"])
+                self.refresh()
+                return
+            self.quit()
+
+        self._in_background(work)
 
     def run_command(self, command):
         """core.spawn() lands here: helper commands on threads, not processes."""
@@ -284,6 +353,7 @@ class App:
             "more_of": lambda: self.more_of(str(args[0]), str(args[1])),
             "show_all": self.show_all,
             "set": lambda: self.set_setting(*card.setting(args)),
+            "update": self.install_update,
         }
         work = actions.get(name)
         if work:
@@ -316,7 +386,8 @@ class App:
     def card_data(self, config=None, status=None):
         if config is None:
             config, status = self.current()
-        return card.data(config, status, busy=self.switching.locked())
+        return card.data(config, status, busy=self.switching.locked(), update=self.update,
+                         updating=self.updating.locked())
 
     def menu(self):
         """The status item's menu (right click), built fresh each time it opens."""
@@ -354,6 +425,16 @@ class App:
                      checked=config["notifyOnChange"]),
             MenuItem(t("start_at_login"), self.toggle_autostart, checked=self.autostart()),
             MenuItem(t("open_collection"), self.open_collection),
+            SEPARATOR,
+        ]
+        if self.update:
+            items.append(MenuItem(t("install_update_menu", version=self.update["version"]), self.install_update,
+                                  enabled=not self.updating.locked()))
+        items += [
+            MenuItem(t("check_updates"), lambda: self._in_background(lambda: self.check_updates(manual=True))),
+            MenuItem(t("check_updates_auto"), lambda: self.set_setting("checkForUpdates",
+                                                                       not config["checkForUpdates"]),
+                     checked=config["checkForUpdates"]),
             SEPARATOR,
             MenuItem(t("quit"), self.quit),
         ]
