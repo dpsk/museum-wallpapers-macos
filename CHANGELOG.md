@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 — 2026-11-06
 
 Speed fixes found in the Omarchy plugin (#1):
 
@@ -12,6 +12,7 @@ Speed fixes found in the Omarchy plugin (#1):
   them instead of one each.
 - A Next no longer waits up to a minute for a download claimed by a process
   that was killed.
+- The bundled painter lists and pools are refreshed.
 
 ## 0.1.4 — 2026-11-04
 
