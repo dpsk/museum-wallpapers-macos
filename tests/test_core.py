@@ -3,6 +3,7 @@ import http.client
 import io
 import json
 import os
+import subprocess
 import tempfile
 import threading
 import time
@@ -712,13 +713,25 @@ class SwitchTest(unittest.TestCase):
         queue = self.cache / "queue"
         queue.mkdir()
         sidecar = queue / "commons-9.json"
-        museum.write_json(sidecar, {"filter": key, "claimedBy": -1})
+        museum.write_json(sidecar, {"filter": key, "claimedBy": os.getppid()})
         self.assertEqual(museum.in_flight(key), 1)
         old = time.time() - museum.IN_FLIGHT_AGE - 5
         os.utime(sidecar, (old, old))
         self.assertEqual(museum.in_flight(key), 0)
         museum.write_json(sidecar, {"filter": key, "claimedBy": os.getpid()})
         os.utime(sidecar, (old, old))
+        self.assertEqual(museum.in_flight(key), 1)
+
+    def test_claims_of_a_killed_process_do_not_count_even_when_fresh(self):
+        key = museum.queue_key(self.config)
+        queue = self.cache / "queue"
+        queue.mkdir()
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        museum.write_json(queue / "commons-9.json", {"filter": key, "claimedBy": dead.pid})
+        museum.write_json(queue / "commons-8.json", {"filter": key, "claimedBy": -1})
+        self.assertEqual(museum.in_flight(key), 0)
+        museum.write_json(queue / "commons-7.json", {"filter": key})
         self.assertEqual(museum.in_flight(key), 1)
 
     def test_switch_waits_for_a_download_in_flight(self):
@@ -791,6 +804,24 @@ class SwitchTest(unittest.TestCase):
         self.assertEqual(info["summary"], "About the artist: Claude Monet was a painter.")
         self.assertEqual(info["url"], "https://en/Claude Monet")
         self.assertTrue(any(name.startswith("describe") for name in threads))
+
+    def test_file_metadata_is_fetched_only_for_the_painting_described(self):
+        page = {"title": "File:X.jpg", "pageid": 42, "imageinfo": [{"descriptionurl": "https://commons/X"}]}
+        calls = []
+
+        def api(_url, **params):
+            calls.append(params)
+            return {"query": {"pages": [{"title": "File:X.jpg", "imageinfo": [{"extmetadata": {"Artist": {"value": "J. Constable"}}}]}]}}
+
+        with mock.patch.object(museum, "entities", return_value={}), \
+                mock.patch.object(museum, "mw_api", side_effect=api):
+            info = museum.describe(page, "Q1", "en")
+        self.assertEqual(info["artist"], "J. Constable")
+        self.assertEqual([(c["iiprop"], c["pageids"]) for c in calls], [("extmetadata", 42)])
+
+        with mock.patch.object(museum, "mw_api", side_effect=api):
+            museum.image_infos(["File:X.jpg"])
+        self.assertEqual(calls[-1]["iiprop"], "size|url")
 
     def test_filter_change_leaves_downloads_alone(self):
         queue = self.cache / "queue"
@@ -867,6 +898,36 @@ class SeedTest(unittest.TestCase):
             self.jobs[0]()
         self.assertEqual(museum.famous_painters(60), ["Q1", "Q2"])
         self.assertEqual(len(self.jobs), 2)
+
+
+class PoolLockTest(unittest.TestCase):
+    """Without a cache or a seed, threads that need the same pool at once
+    run one Wikidata query between them."""
+
+    def test_one_query_for_many_workers(self):
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tmp.cleanup)
+        queries = []
+
+        def query(path, filters):
+            queries.append(path)
+            time.sleep(0.3)
+            museum.write_json(path, {"at": time.time(), "items": [["Q1", "File:A.jpg"]]})
+            return [["Q1", "File:A.jpg"]]
+
+        filters = museum.normalize_filters({"artists": ["Q296"]})
+        path = Path(tmp.name) / "pools" / f"{museum.filter_key(filters)}.json"
+        with mock.patch.object(museum, "CACHE", Path(tmp.name)), \
+                mock.patch.object(museum, "_query_pool", side_effect=query):
+            results = []
+            threads = [threading.Thread(target=lambda: results.append(museum._load_pool(path, filters)))
+                       for _ in range(4)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(len(queries), 1)
+        self.assertEqual(results, [[["Q1", "File:A.jpg"]]] * 4)
 
 
 class BundledSeedTest(unittest.TestCase):

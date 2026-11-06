@@ -640,7 +640,13 @@ def _load_pool(path, filters):
             _pools[path] = _query_pool(path, filters)
         refresh_later(path.stem, refresh)
         return old
-    return _query_pool(path, filters)
+    # Prefetch workers and an on-demand Next can all get here at once: one
+    # queries Wikidata (~20 s), the others wait and read what it wrote.
+    with lock(f"pools/.{path.stem}.lock"):
+        pool = read_json(path)
+        if fresh(pool) and isinstance(pool.get("items"), list):
+            return pool["items"]
+        return _query_pool(path, filters)
 
 
 def _query_pool(path, filters):
@@ -686,11 +692,16 @@ def usable(title, width, height, config, screen):
     return thumb_w >= min(screen[0], MAX_THUMB_WIDTH) * 0.9 and thumb_w / ratio >= screen[1] * 0.85
 
 
+META_FIELDS = "ObjectName|Artist|DateTimeOriginal|ImageDescription"
+
+
 def image_infos(titles):
+    """Size and URLs only: with extmetadata Commons answers ~13x slower (11 s
+    instead of 0.85 s for 50 files, measured 2026-11-06), and only the one
+    painting picked needs it (`file_metadata`)."""
     infos = {}
     for batch in chunks(titles, 50):
-        data = mw_api(COMMONS_API, action="query", prop="imageinfo", iiprop="size|url|extmetadata",
-                      iiextmetadatafilter="ObjectName|Artist|DateTimeOriginal|ImageDescription",
+        data = mw_api(COMMONS_API, action="query", prop="imageinfo", iiprop="size|url",
                       titles="|".join(batch))
         # Titles come back normalized; key the result by what was asked for.
         asked = {n["to"]: n["from"] for n in data.get("query", {}).get("normalized", [])}
@@ -828,20 +839,29 @@ def article(entity, language):
     return None
 
 
+def file_metadata(pageid):
+    """A Commons file's title, artist, date and description fields."""
+    data = mw_api(COMMONS_API, action="query", prop="imageinfo", iiprop="extmetadata",
+                  iiextmetadatafilter=META_FIELDS, pageids=pageid)
+    pages = data.get("query", {}).get("pages") or [{}]
+    return (pages[0].get("imageinfo") or [{}])[0].get("extmetadata", {})
+
+
 def describe(page, qid, language):
     """Everything the plugin shows about a painting."""
     image = page["imageinfo"][0]
-    meta = image.get("extmetadata", {})
     languages = "|".join(dict.fromkeys((language, "en")))
     sites = "|".join(f"{lang.replace('-', '_')}wiki" for lang in dict.fromkeys((language, "en")))
-    # All languages: a painting labelled only in German still gets its title.
-    painting = entities([qid], languages=None, site=sites).get(qid, {})
-    creators = claim_ids(painting, "P170")
-    collections = claim_ids(painting, "P195")
-    movements = claim_ids(painting, "P135")
-    genres = claim_ids(painting, "P136")
-    # The rest depends only on the painting's item: fetched side by side.
-    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="describe") as pool:
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="describe") as pool:
+        # The file's own metadata comes alongside the Wikidata lookups.
+        meta_job = None if "extmetadata" in image else pool.submit(file_metadata, page["pageid"])
+        # All languages: a painting labelled only in German still gets its title.
+        painting = entities([qid], languages=None, site=sites).get(qid, {})
+        creators = claim_ids(painting, "P170")
+        collections = claim_ids(painting, "P195")
+        movements = claim_ids(painting, "P135")
+        genres = claim_ids(painting, "P136")
+        # The rest depends only on the painting's item: fetched side by side.
         related_job = pool.submit(entities, creators[:1] + collections[:1] + genres[:1],
                                   props="labels|claims|sitelinks", languages=languages, site=sites)
         movement_job = pool.submit(entities, movements[:1], props="labels", languages=languages) \
@@ -851,6 +871,7 @@ def describe(page, qid, language):
         related = related_job.result()
         movement = movement_job.result().get(movements[0], {}) if movement_job else {}
         own_summary = summary_job.result() if summary_job else ("", None)
+        meta = meta_job.result() if meta_job else image["extmetadata"]
     artist = related.get(creators[0], {}) if creators else {}
     if not movements and artist:
         # Movements are tagged on artists far more often than on paintings.
@@ -948,10 +969,25 @@ def claim(name, key, allow_shown=False):
 IN_FLIGHT_AGE = 120
 
 
+def alive(pid):
+    """Whether process `pid` still runs (True when the claim names none)."""
+    if not isinstance(pid, int) or isinstance(pid, bool):
+        return True
+    if pid <= 0:
+        return False  # kill(0) or kill(-1) would ask about whole process groups
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OverflowError):
+        return True
+    return True
+
+
 def in_flight(key):
     """Downloads under way for this queue key (claimed, image not there yet):
-    this process's, or another process's from the last two minutes (a claim
-    left by a process that was killed must not hold anything up)."""
+    this process's, or another live process's from the last two minutes (a
+    claim left by a process that was killed must not hold anything up)."""
     if not QUEUE.exists():
         return 0
     count = 0
@@ -963,7 +999,8 @@ def in_flight(key):
         if sidecar.with_suffix(".jpg").exists():
             continue
         data = read_json(sidecar, {})
-        if data.get("filter") == key and (data.get("claimedBy") == os.getpid() or age < IN_FLIGHT_AGE):
+        pid = data.get("claimedBy")
+        if data.get("filter") == key and (pid == os.getpid() or (age < IN_FLIGHT_AGE and alive(pid))):
             count += 1
     return count
 
@@ -1366,7 +1403,7 @@ def redescribe(painting, config):
     try:
         with timed("describe again"):
             data = mw_api(COMMONS_API, action="query", prop="imageinfo", iiprop="size|url|extmetadata",
-                          iiextmetadatafilter="ObjectName|Artist|DateTimeOriginal|ImageDescription",
+                          iiextmetadatafilter=META_FIELDS,
                           pageids=match.group(1))
             page = data["query"]["pages"][0]
             fresh = describe(page, info["id"], config["language"])

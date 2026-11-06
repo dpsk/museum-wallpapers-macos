@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Speed fixes found in the Omarchy plugin (#1):
+
+- A painting is found ~5x faster: the search asks Commons for sizes and
+  URLs only, and the file's title, artist and date fields only for the one
+  painting picked (50 files: 0.85 s instead of 11 s). One fetch on a first
+  start: 7 s instead of 34 s.
+- Threads that need the same uncached pool run one Wikidata query between
+  them instead of one each.
+- A Next no longer waits up to a minute for a download claimed by a process
+  that was killed.
+
 ## 0.1.4 — 2026-11-04
 
 0.1.2 and 0.1.3 were tagged but never released: their builds failed on the
