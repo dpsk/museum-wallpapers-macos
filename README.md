@@ -21,17 +21,19 @@ Website: **[nikaliuk.in](https://nikaliuk.in/)**
   Retina resolution, and a Space you switch to gets it too.
 - **Know what you are looking at.** A small museum label in a corner of the
   wallpaper; click the menu bar icon for the card with the story, **Read
-  more**, **Save**, **More by …** / **More Impressionism**, and the settings.
+  more**, **Save** and **More by …** / **More Impressionism**; the gear in
+  the card (or a right click on the icon) opens the settings.
 - **Famous painters first.** By default only the ~280 painters covered by 60+
   Wikipedias; widen it to ~1200 or to everyone.
 - **Updates itself.** A new release is offered in the card and the menu;
   one click downloads, verifies and installs it, and restarts the app.
-- **English or Russian, switched in the card.** The interface, titles, artists,
-  museums and stories follow the language you pick (see
-  [Languages](#languages)).
+- **Ten languages.** English, Русский, Українська, Deutsch, Français,
+  Español, Italiano, Nederlands, Polski, Português: the interface, titles,
+  artists, museums and stories follow the language you pick, and paintings
+  described in your language can come first (see [Languages](#languages)).
 
 <p align="center">
-  <img src="screenshots/card-en.jpg" width="380" alt="The card: preview, title, artist, the story, Next, Read more, Save, More by, and the interval, artists, fit, caption and language settings">
+  <img src="screenshots/card-en.jpg" width="380" alt="The card: preview, title, artist, museum, the story, Next, Read more, Save, the settings gear and More by">
   <img src="screenshots/card-ru.jpg" width="380" alt="The same card in Russian">
 </p>
 
@@ -77,8 +79,8 @@ connection to Wikimedia.
 | Do | What happens |
 | --- | --- |
 | Hover the menu bar icon | Title and artist |
-| Click it | The card: preview, title, artist, museum, story, **Next**, **Read more**, **Save**, **More by …**, and the settings |
-| Right-click (or Control-click) it | Every setting as a menu, plus language, notifications, Open at login, the collection folder and Quit |
+| Click it | The card: preview, title, artist, museum, story, **Next**, **Read more**, **Save**, **More by …**, and a gear for the settings |
+| Right-click (or Control-click) it, or click the gear in the card | The menu: every setting, notifications, Open at login, the collection folder, updates and Quit |
 | Middle-click it | Next painting |
 | Open the app again while it runs | Opens the card |
 
@@ -104,16 +106,26 @@ write to), it opens the release page instead.
 
 ## Languages
 
-The **Language** row of the card switches between **Auto** (the macOS
-language), **EN** and **RU**; the menu also offers Ukrainian, German, French,
-Spanish, Italian, Dutch, Polish and Portuguese for the paintings' text. The
-choice changes the interface and everything said about the painting on screen
-at once, including the caption on the wallpaper.
+**Language** in the menu offers **Same as macOS** and English, Русский,
+Українська, Deutsch, Français, Español, Italiano, Nederlands, Polski and
+Português. The choice changes the interface and everything said about the
+painting on screen at once, including the caption on the wallpaper.
 
-The language never narrows **which** paintings you get: painters are picked
-by how many Wikipedias cover them and paintings from Wikidata and Commons,
-whatever language you read in. Only the description changes, and falls back
-when your language has nothing:
+Painters are picked by how many Wikipedias cover them, whatever language you
+read in, but not every painting is described in every language: among the
+famous painters' works, about 21% have a Russian title and 12% a Russian
+Wikipedia article (English is nearly complete). **In my language** decides
+what to do about it:
+
+| In my language | |
+| --- | --- |
+| **Described ones first** (default) | Each search prefers paintings described in your language, and takes the others when there are none |
+| **Only described ones** | Only those; when none turns up, a random painting is shown with a note |
+| **No preference** | Language plays no part in which painting comes next |
+
+**Described means** sets what counts: **Has a title in my language** (a
+Wikidata label, the default) or **Has a Wikipedia article in my language**.
+The description itself falls back when your language has nothing:
 
 1. The painting's own Wikipedia article in your language.
 2. The artist's article in your language ("О художнике: …").
@@ -126,7 +138,7 @@ are labelled only in their museum's language).
 
 ## Settings
 
-All of these are in the card or the menu; they are stored in
+All of these are in the menu; they are stored in
 `~/Library/Application Support/MuseumWallpapers/settings.json`, which you can
 also edit by hand.
 
@@ -137,6 +149,8 @@ also edit by hand.
 | `fit` | `"blur"` | Fit | `blur` (framed by a blurred copy of itself), `auto` (fill unless that crops more than 10%), `wall` (on a dark wall), `cover` (fill and crop) |
 | `caption` | `"bottom-right"` | Caption | `off`, `bottom-right`, `bottom-left`, `top-right`, `top-left` |
 | `language` | `"auto"` | Language | Language of the interface and the descriptions; `auto` follows macOS |
+| `localized` | `"prefer"` | In my language | `prefer` paintings described in your language, show `only` those, or `all` alike |
+| `localizedBy` | `"title"` | Described means | `title` (Wikidata has its title in your language) or `article` (Wikipedia has an article about it) |
 | `notifyOnChange` | `false` | Menu | A notification with the painting each time it changes |
 | `checkForUpdates` | `true` | Menu | Ask GitHub once a day for a newer version |
 | `saveDir` | `~/Pictures/Museum Wallpapers` | Menu: Open collection folder | Where **Save** puts paintings; also the offline fallback |

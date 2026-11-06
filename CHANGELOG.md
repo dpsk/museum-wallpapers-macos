@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.0 — 2026-11-06
+
+From the Omarchy plugin 0.1.3–0.1.4 (#2):
+
+- **The card is for the painting.** The settings rows are gone from it; a
+  gear in the card opens the menu, where every setting is. With the room,
+  the story is longer: six sentences of Wikipedia (was four), 600
+  characters of a Commons description (was 400), 14 lines in the card.
+- **Ten interface languages:** English, Русский, Українська, Deutsch,
+  Français, Español, Italiano, Nederlands, Polski, Português. Error
+  messages are translated too. A language without a table gets an English
+  interface (titles and stories still come in it); a broken strings file
+  falls back to English.
+- **In my language** (menu): paintings described in your language first
+  (default), only those, or no preference; **Described means** a title in
+  your language (default) or a Wikipedia article. For Russian only ~21% of
+  the famous painters' works have a Russian title and ~12% an article.
+  Paintings already queued stay queued after the update.
+
 ## 0.1.5 — 2026-11-06
 
 Speed fixes found in the Omarchy plugin (#1):

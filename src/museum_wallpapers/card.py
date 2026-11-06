@@ -1,7 +1,7 @@
 """The card about the painting, shown in a popover under the menu bar icon,
 laid out like the Omarchy plugin's popup: preview, title, artist, museum,
-story, Next / Read more / Save, More by … / More …, and the interval,
-artists, fit and caption settings as rows of choices.
+the story, Next / Read more / Save, More by … / More …, the active filter
+and a gear for the settings, which live in the menu.
 
 It is a small HTML page in a WKWebView (macui.py). Python sends it data
 (`data()`, as JSON) and the page posts button presses back as
@@ -18,31 +18,7 @@ from . import core, strings
 
 WIDTH = 380  # points
 PREVIEW_SIZE = (760, 428)  # pixels: 16:9 at 2x
-SUMMARY_LIMIT = 900
-
-# What the card's rows may set, and to which values.
-CARD_SETTINGS = {
-    "intervalMinutes": set(core.INTERVALS),
-    "fame": {"famous", "known", "any"},
-    "fit": {"blur", "auto", "wall", "cover"},
-    "caption": set(core.CAPTIONS),
-    # The other languages are in the menu; the card offers the app's own two.
-    "language": {"auto", "en", "ru"},
-}
-
-
-def setting(args):
-    """(key, value) from a row button's arguments; ValueError for anything
-    the card does not offer."""
-    if len(args) != 2:
-        raise ValueError(f"bad setting: {args!r}")
-    key, value = str(args[0]), args[1]
-    if key == "intervalMinutes" and isinstance(value, float) and value.is_integer():
-        value = int(value)
-    if key not in CARD_SETTINGS or isinstance(value, bool) or value not in CARD_SETTINGS[key]:
-        raise ValueError(f"bad setting: {args!r}")
-    return key, value
-
+SUMMARY_LIMIT = 1500  # six sentences; the page clamps to 14 lines
 
 def filter_label(override):
     names = [x.get("label") or x.get("id") for key in ("artists", "movements", "genres")
@@ -78,28 +54,6 @@ def preview_url(path):
         return ""
 
 
-def rows(config):
-    t = lambda key, **values: strings.t(key, config, **values)  # noqa: E731
-    return [
-        {"key": "intervalMinutes", "title": t("change_every_short"), "current": config["intervalMinutes"],
-         "choices": [{"value": m, "label": strings.short_interval(m, config),
-                      "hint": strings.interval_label(m, config)} for m in strings.CARD_INTERVALS]},
-        {"key": "fame", "title": t("artists"), "current": config["fame"],
-         "choices": [{"value": f, "label": t(f"fame_{f}_short"), "hint": t(f"fame_{f}")}
-                     for f in ("famous", "known", "any")]},
-        {"key": "fit", "title": t("fit_short"), "current": config["fit"],
-         "choices": [{"value": f, "label": t(f"fit_{f}_short"), "hint": t(f"fit_{f}")}
-                     for f in ("blur", "auto", "wall", "cover")]},
-        {"key": "caption", "title": t("caption_short"), "current": config["caption"],
-         "choices": [{"value": "off", "label": t("caption_off"), "hint": t("caption_off")}]
-         + [{"value": c, "label": arrow, "hint": t(f"caption_{c}")} for c, arrow in strings.CORNER_ARROWS.items()]},
-        {"key": "language", "title": t("language_short"), "current": config["languageSetting"],
-         "choices": [{"value": "auto", "label": t("lang_auto_short"), "hint": t("lang_auto")},
-                     {"value": "en", "label": "EN", "hint": strings.LANGUAGE_NAMES["en"]},
-                     {"value": "ru", "label": "RU", "hint": strings.LANGUAGE_NAMES["ru"]}]},
-    ]
-
-
 def data(config, status, busy=False, update=None, updating=False):
     """Everything the card shows, from core.load_config() and core.status();
     `update` is a newer release (updater.check()), `updating` while it installs."""
@@ -119,7 +73,6 @@ def data(config, status, busy=False, update=None, updating=False):
         "summaryNote": "",
         "error": status.get("error") or "",
         "more": [],
-        "rows": rows(config),
         "filter": "",
         "buttons": {"next": t("next_short"), "loading": t("loading"), "open": t("read_more"),
                     "save": t("save_short"), "settings": t("settings"), "clear": t("clear_filter")},
@@ -195,7 +148,7 @@ h1 { font-size: 15px; font-weight: 700; line-height: 1.3; margin-top: 3px;
 .byline { font-size: 13px; color: var(--fg2); }
 .place { color: var(--dim); }
 .byline, .place, .filter span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.summary { line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 9;
+.summary { line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 14;
   overflow: hidden; -webkit-user-select: text; cursor: auto; }
 .error { color: var(--accent); font-size: 11px; }
 .note { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: -4px; }
@@ -209,20 +162,13 @@ button:disabled { opacity: .5; }
 button.big { font-size: 13px; }
 button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2;
   stroke-linecap: round; stroke-linejoin: round; }
-.rows { display: grid; grid-template-columns: max-content 1fr; column-gap: 8px; row-gap: 3px;
-  align-items: center; margin-top: 2px; }
-.rows .label { color: var(--dim); font-size: 11px; }
-.choices { display: flex; flex-wrap: wrap; gap: 1px; }
-.choices button { font-size: 11px; padding: 5px 6px; }
-.choices button.on { background: var(--on); font-weight: 700; }
 .filter { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; }
 .filter span { flex: 1; }
 .update { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 11px;
   border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; }
 .update span { flex: 1; }
+button.gear { margin-left: auto; color: var(--dim); padding: 6px; }
 .update button { color: var(--accent); font-weight: 700; font-size: 11px; padding: 4px 6px; margin-right: -6px; }
-.footer { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 4px; margin-top: 2px; }
-.footer button { color: var(--dim); font-size: 11px; padding: 4px 6px; margin-right: -6px; }
 </style>
 </head>
 <body>
@@ -234,6 +180,7 @@ const ICONS = {
   open: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   save: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>',
   close: '<path d="M7 7l10 10M17 7L7 17"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
 };
 function post(action, ...args) {
   if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.museum)
@@ -288,6 +235,9 @@ function render(d) {
   main.append(next);
   if (d.hasInfo) main.append(button(d.buttons.open, "open", () => post("open"), "big"));
   if (d.canSave) main.append(button(d.buttons.save, "save", () => post("save"), "big"));
+  const gear = button(null, "gear", () => post("settings"), "gear");
+  gear.title = d.buttons.settings;
+  main.append(gear);
   card.append(main);
 
   if (d.more.length) {
@@ -299,22 +249,6 @@ function render(d) {
     }
     card.append(more);
   }
-
-  const rows = el("div", "rows");
-  for (const row of d.rows) {
-    rows.append(el("div", "label", row.title));
-    const choices = el("div", "choices");
-    for (const choice of row.choices) {
-      const node = button(choice.label, null, () => {
-        for (const other of choices.children) other.classList.toggle("on", other === node);
-        post("set", row.key, choice.value);
-      }, choice.value === row.current ? "on" : "");
-      if (choice.hint) node.title = choice.hint;
-      choices.append(node);
-    }
-    rows.append(choices);
-  }
-  card.append(rows);
 
   if (d.filter) {
     const filter = el("div", "filter");
@@ -335,9 +269,6 @@ function render(d) {
     card.append(update);
   }
 
-  const footer = el("div", "footer");
-  footer.append(button(d.buttons.settings + " …", null, () => post("settings")));
-  card.append(footer);
   reportSize();
 }
 window.render = render;

@@ -16,7 +16,7 @@ from pathlib import Path
 ENGLISH = {
     "app": "Museum Wallpapers",
     "about_artist": "About the artist: ",
-    "story_in": "In {language}",
+    "story_in": "Language: {language}",
     "about": "About this painting",
     "next": "Next painting",
     "next_short": "Next",

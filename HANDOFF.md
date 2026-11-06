@@ -12,8 +12,11 @@ Done and pushed to `main`:
 - The app: menu bar icon, the Omarchy-style card (WKWebView in a popover),
   the menu, wallpaper per screen through NSWorkspace, re-applied on Space
   changes, the SF Mono caption, notifications, Open at login, one instance.
-- Language switch in the card (Auto / EN / RU; more in the menu). Picking
-  never depends on the language; descriptions prefer the reader's language
+- Ten interface languages (English in `strings.py`, the rest in
+  `data/strings.json`, same keys checked by a test). Since 0.2.0 settings
+  live in the menu only (the card has a gear that opens it); **In my
+  language** (prefer / only / all) orders or narrows each search round by
+  one wbgetentities call. Descriptions prefer the reader's language
   (painting article, then artist article) before English.
 - The updater (`src/museum_wallpapers/updater.py`): daily check of the latest
   GitHub release, download verified by size and SHA-256, bundle id / version /
@@ -107,9 +110,11 @@ Checklist:
       the arrow simply stays). Click elsewhere: it closes. Light and dark mode.
 - [ ] Card buttons: Next (shows Loading…), Read more (browser), Save (to
       `~/Pictures/Museum Wallpapers` with `CREDITS.md`), More by …, the ×
-      that clears the filter, every settings row, Settings … (the menu).
-- [ ] Language RU: the card switches at once; within a minute the caption on
-      the wallpaper is redrawn in Russian.
+      that clears the filter, the gear (opens the menu).
+- [ ] Language RU (and one more, e.g. Deutsch): the card and menu switch at
+      once; within a minute the caption on the wallpaper is redrawn.
+- [ ] In my language → Only described ones, with Русский: Next finds only
+      paintings with a Russian title (`timing search` in the log stays ~2–3 s).
 - [ ] Right-click / Control-click: the menu; middle-click: next painting.
 - [ ] Notifications: turn on *Notify when it changes*, press Next. macOS asks
       for permission once; the banner has the painting and a Read more

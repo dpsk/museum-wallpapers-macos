@@ -89,7 +89,7 @@
   "uk": {
     "app": "Museum Wallpapers",
     "about_artist": "Про автора: ",
-    "story_in": "Мовою: {language}",
+    "story_in": "Мова: {language}",
     "about": "Про цю картину",
     "next": "Наступна картина",
     "next_short": "Далі",
@@ -176,7 +176,7 @@
   "de": {
     "app": "Museum Wallpapers",
     "about_artist": "Über den Künstler: ",
-    "story_in": "Auf {language}",
+    "story_in": "Sprache: {language}",
     "about": "Über dieses Gemälde",
     "next": "Nächstes Gemälde",
     "next_short": "Weiter",
@@ -263,7 +263,7 @@
   "fr": {
     "app": "Museum Wallpapers",
     "about_artist": "À propos de l’artiste : ",
-    "story_in": "En {language}",
+    "story_in": "Langue : {language}",
     "about": "À propos de ce tableau",
     "next": "Tableau suivant",
     "next_short": "Suivant",
@@ -350,7 +350,7 @@
   "es": {
     "app": "Museum Wallpapers",
     "about_artist": "Sobre el artista: ",
-    "story_in": "En {language}",
+    "story_in": "Idioma: {language}",
     "about": "Sobre este cuadro",
     "next": "Siguiente cuadro",
     "next_short": "Siguiente",
@@ -437,7 +437,7 @@
   "it": {
     "app": "Museum Wallpapers",
     "about_artist": "Sull’artista: ",
-    "story_in": "In {language}",
+    "story_in": "Lingua: {language}",
     "about": "Su questo dipinto",
     "next": "Dipinto successivo",
     "next_short": "Avanti",
@@ -524,7 +524,7 @@
   "nl": {
     "app": "Museum Wallpapers",
     "about_artist": "Over de kunstenaar: ",
-    "story_in": "In het {language}",
+    "story_in": "Taal: {language}",
     "about": "Over dit schilderij",
     "next": "Volgend schilderij",
     "next_short": "Volgende",
@@ -698,7 +698,7 @@
   "pt": {
     "app": "Museum Wallpapers",
     "about_artist": "Sobre o artista: ",
-    "story_in": "Em {language}",
+    "story_in": "Idioma: {language}",
     "about": "Sobre esta pintura",
     "next": "Próxima pintura",
     "next_short": "Próxima",

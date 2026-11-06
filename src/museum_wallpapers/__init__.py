@@ -1,6 +1,6 @@
 """Museum Wallpapers for macOS: endless public-domain paintings as the desktop wallpaper."""
 
-VERSION = "0.1.5"
+VERSION = "0.2.0"
 APP_NAME = "Museum Wallpapers"
 APP_ID = "MuseumWallpapers"
 # CFBundleIdentifier of the app; also names the login-item plist in development.

@@ -23,35 +23,42 @@ class CardDataTest(unittest.TestCase):
         self.assertTrue(data["canSave"])
         self.assertEqual(data["summaryNote"], "")
 
-    def test_rows_are_the_omarchy_settings_plus_caption_and_language(self):
-        rows = card.data(CONFIG, {"active": False})["rows"]
-        self.assertEqual([r["key"] for r in rows], ["intervalMinutes", "fame", "fit", "caption", "language"])
-        self.assertEqual([c["label"] for c in rows[0]["choices"]], ["15m", "30m", "1h", "3h", "6h", "1d", "Off"])
-        self.assertEqual([c["label"] for c in rows[2]["choices"]], ["Blur", "Auto", "Wall", "Fill"])
-        self.assertEqual([c["label"] for c in rows[4]["choices"]], ["Auto", "EN", "RU"])
-        self.assertEqual(rows[0]["current"], 60)
-        self.assertEqual(rows[4]["current"], "en")
-        self.assertEqual(card.rows(core.normalize_config({}))[4]["current"], "auto")
+    def test_settings_are_not_in_the_card(self):
+        data = card.data(CONFIG, {"active": False})
+        self.assertNotIn("rows", data)
+        self.assertEqual(data["buttons"]["settings"], "Settings")
+        self.assertIn('post("settings")', card.PAGE)
+        self.assertNotIn('post("set"', card.PAGE)
+
+    def test_a_longer_story(self):
+        story = " ".join(f"Sentence number {i} is here." for i in range(40))
+        data = card.data(CONFIG, {"active": True, "info": {**INFO, "summary": story}})
+        self.assertLessEqual(len(data["summary"]), card.SUMMARY_LIMIT + 1)
+        self.assertGreater(len(data["summary"]), 1000)
+        self.assertIn("-webkit-line-clamp: 14", card.PAGE)
+
+    def test_every_language(self):
+        status = {"active": True, "info": INFO, "image": "", "fromCache": True, "filter": {"artists": [
+            {"id": "Q42207", "label": "Caravaggio"}]}}
+        for language in core.LANGUAGES[1:]:
+            data = card.data(core.normalize_config({"language": language}), status,
+                             update={"version": "9.9.9"})
+            texts = [data["title"], data["filter"], data["update"]["text"], data["update"]["button"],
+                     *data["buttons"].values(), *(m["label"] for m in data["more"])]
+            for text in texts:
+                self.assertNotRegex(text, r"^[a-z_]+$|\{", f"{language}: {text}")
 
     def test_russian_card_says_when_the_story_is_in_english(self):
         russian = core.normalize_config({"language": "ru"})
         data = card.data(russian, {"active": True, "info": {**INFO, "summaryLanguage": "en"}})
         self.assertEqual(data["summaryNote"], "На языке: English")
         self.assertEqual(data["buttons"]["next"], "Дальше")
-        self.assertEqual([c["label"] for c in data["rows"][0]["choices"]][:3], ["15м", "30м", "1ч"])
         same = card.data(russian, {"active": True, "info": {**INFO, "summaryLanguage": "ru"}})
         self.assertEqual(same["summaryNote"], "")
 
     def test_not_ours_and_first_run(self):
         self.assertIn("first one", card.data(CONFIG, {"active": False})["title"])
         self.assertIn("not from", card.data(CONFIG, {"active": False, "setAt": 1})["title"])
-
-    def test_setting_validation(self):
-        self.assertEqual(card.setting(["intervalMinutes", 60.0]), ("intervalMinutes", 60))
-        self.assertEqual(card.setting(["caption", "top-left"]), ("caption", "top-left"))
-        for bad in (["intervalMinutes", 7], ["intervalMinutes", True], ["saveDir", "/"], ["fit"], ["language", "de"]):
-            with self.assertRaises(ValueError):
-                card.setting(bad)
 
     def test_preview(self):
         import tempfile

@@ -103,7 +103,7 @@ class MacPlatformTest(unittest.TestCase):
             NSRunLoop.currentRunLoop().runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(0.1))
         self.assertTrue(ui.loaded)
         size = [m for m in messages if str(m["action"]) == "size"][0]
-        self.assertGreater(int(size["args"][0]), 150)
+        self.assertGreater(int(size["args"][0]), 80)  # title, Next, the gear (no settings rows since 0.2.0)
 
     @unittest.skipUnless(os.environ.get("MUSEUM_WALLPAPERS_LIVE_WALLPAPER") == "1", "changes the real wallpaper")
     def test_live_wallpaper_round_trip(self):

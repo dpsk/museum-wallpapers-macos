@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from helpers import FakePlatform, app_module, core, make_jpeg
+from helpers import FakePlatform, app_module, core, make_jpeg, strings
 
 
 class FakeView(app_module.NullView):
@@ -132,6 +132,30 @@ class AppTest(unittest.TestCase):
         self.assertIn("3 часа", titles)
         self.assertTrue(self.items()["Русский"].checked)
 
+    def test_language_preference_from_the_menu(self):
+        items = self.items()
+        self.assertTrue(items["Described ones first"].checked)
+        self.assertTrue(items["Has a title in my language"].checked)
+        items["Only described ones"].action()
+        items["Has a Wikipedia article in my language"].action()
+        config = core.load_config()
+        self.assertEqual((config["localized"], config["localizedBy"]), ("only", "article"))
+        titles = [item.title for _, item in flatten(self.app.menu())]
+        self.assertLess(titles.index("Language"), titles.index("In my language"))
+        self.assertLess(titles.index("In my language"), titles.index("Described means"))
+
+    def test_menu_in_every_language(self):
+        english = set(item.title for _, item in flatten(self.app.menu()))
+        for language in core.LANGUAGES[1:]:
+            core.save_setting("language", language)
+            titles = [item.title for _, item in flatten(self.app.menu())]
+            for title in titles:
+                self.assertNotRegex(title, r"^[a-z_]+$|\{", f"{language}: {title}")
+            if language != "en":
+                # Everything but names (painters, languages, the app) is translated.
+                same = set(titles) & english - set(strings.LANGUAGE_NAMES.values()) - {"Museum Wallpapers"}
+                self.assertLessEqual(len(same), 3, f"{language}: {sorted(same)}")
+
     def test_open_at_login_toggles(self):
         self.platform.autostart = False
         self.platform.autostart_enabled = lambda: self.platform.autostart
@@ -181,14 +205,9 @@ class AppTest(unittest.TestCase):
         self.assertEqual(core.read_json(self.state / "filter.json")["artists"],
                          [{"id": "Q186212", "label": "Ivan Aivazovsky"}])
         self.assertTrue(wait_for(lambda: not self.app.switching.locked()))
+        # Settings are not changed from the card any more.
         self.app.card_action("set", ["intervalMinutes", 180.0])
-        self.app.card_action("set", ["language", "ru"])
-        config = core.load_config()
-        self.assertEqual((config["intervalMinutes"], config["languageSetting"]), (180, "ru"))
-        with self.assertRaises(ValueError):
-            self.app.card_action("set", ["saveDir", "/tmp"])
-        with self.assertRaises(ValueError):
-            self.app.card_action("set", ["fit", "stretch"])
+        self.assertEqual(core.load_config()["intervalMinutes"], 60)
 
     def test_next_ignores_presses_while_switching(self):
         with mock.patch.object(core, "cmd_next", side_effect=lambda *_: time.sleep(0.2)) as cmd_next:

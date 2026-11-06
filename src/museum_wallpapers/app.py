@@ -352,7 +352,6 @@ class App:
             "more_by": lambda: self.more_by(str(args[0]), str(args[1])),
             "more_of": lambda: self.more_of(str(args[0]), str(args[1])),
             "show_all": self.show_all,
-            "set": lambda: self.set_setting(*card.setting(args)),
             "update": self.install_update,
         }
         work = actions.get(name)
@@ -421,6 +420,8 @@ class App:
             MenuItem(t("caption"), submenu=[choice("caption", c, t(f"caption_{c}"))
                                             for c in ("off", "bottom-right", "bottom-left", "top-right", "top-left")]),
             MenuItem(t("language"), submenu=languages),
+            MenuItem(t("localized"), submenu=[choice("localized", v, t(f"loc_{v}")) for v in core.LOCALIZED]),
+            MenuItem(t("localized_by"), submenu=[choice("localizedBy", v, t(f"by_{v}")) for v in core.LOCALIZED_BY]),
             MenuItem(t("notify_on_change"), lambda: self.set_setting("notifyOnChange", not config["notifyOnChange"]),
                      checked=config["notifyOnChange"]),
             MenuItem(t("start_at_login"), self.toggle_autostart, checked=self.autostart()),

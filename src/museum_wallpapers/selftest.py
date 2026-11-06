@@ -68,6 +68,14 @@ def run(out=None):
     check("menu_bar_icon", lambda: resources.menu_bar_icon().size)
     check("updater", lambda: {"arch": updater.arch_name(), "bundle": str(updater.bundle_path()),
                               "cannot_install": updater.cannot_install(updater.bundle_path())}, required=False)
+    def interface_languages():
+        from . import strings
+        tables = strings.load_strings()
+        if len(tables) != len(strings.LANGUAGE_NAMES):
+            raise RuntimeError(f"only {sorted(tables)} in {strings.STRINGS_FILE}")
+        return sorted(tables)
+
+    check("strings", interface_languages)
     check("seed", lambda: {level: len((core.seed(level) or {})["items"]) for level in core.FAME.values() if level})
     # A real request: a bundle whose Python cannot verify certificates
     # fails here rather than on a user's Mac.
