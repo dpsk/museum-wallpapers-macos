@@ -40,7 +40,7 @@ version = { attr = "museum_wallpapers.VERSION" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-museum_wallpapers = ["data/*.json.gz"]
+museum_wallpapers = ["data/*.json.gz", "data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

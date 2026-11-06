@@ -834,6 +834,92 @@ class SwitchTest(unittest.TestCase):
         self.assertTrue(part.exists())
 
 
+    # -- the language preference ("In my language")
+
+    def test_language_preference_orders_or_narrows_candidates(self):
+        found = [({"pageid": 1}, "Q1"), ({"pageid": 2}, "Q2"), ({"pageid": 3}, "Q3")]
+        answer = {"Q1": {"labels": {}, "sitelinks": {}},
+                  "Q2": {"labels": {"ru": {"value": "Девятый вал"}}, "sitelinks": {}},
+                  "Q3": {"labels": {"ru": {"value": "Гадалка"}}, "sitelinks": {"ruwiki": {"title": "Гадалка"}}}}
+        prefer = museum.normalize_config({"language": "ru", "localized": "prefer"})
+        only = museum.normalize_config({"language": "ru", "localized": "only"})
+        by_article = museum.normalize_config({"language": "ru", "localized": "only", "localizedBy": "article"})
+        with mock.patch.object(museum, "entities", return_value=answer) as entities:
+            self.assertEqual([q for _, q in museum.prefer_described(found, prefer)], ["Q2", "Q3", "Q1"])
+            self.assertEqual([q for _, q in museum.prefer_described(found, only)], ["Q2", "Q3"])
+            self.assertEqual([q for _, q in museum.prefer_described(found, by_article)], ["Q3"])
+        self.assertEqual(entities.call_args.kwargs, {"props": "labels|sitelinks", "languages": "ru", "site": "ruwiki"})
+        everyone = museum.normalize_config({"localized": "all"})
+        self.assertEqual(museum.prefer_described(found, everyone), found)
+        with mock.patch.object(museum, "entities", side_effect=OSError("offline")), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(museum.prefer_described(found, only), found)  # no answer: no preference
+
+    def test_language_preference_settings(self):
+        config = museum.normalize_config({})
+        self.assertEqual((config["localized"], config["localizedBy"]), ("prefer", "title"))
+        odd = museum.normalize_config({"localized": "never", "localizedBy": 3})
+        self.assertEqual((odd["localized"], odd["localizedBy"]), ("prefer", "title"))
+        self.assertNotEqual(museum.queue_key(museum.normalize_config({"localized": "only"})),
+                            museum.queue_key(museum.normalize_config({"localized": "all"})))
+        # "prefer" and "all" only reorder: the queue key (and the queue) stay as before 0.2.0.
+        for localized in ("prefer", "all"):
+            config = museum.normalize_config({"language": "ru", "localized": localized})
+            self.assertEqual(museum.queue_key(config), museum.filter_key(
+                {"filters": museum.active_filters(config), "fame": "famous", "language": "ru"}))
+        core_settings = museum.normalize_config({"language": "ru"})
+        self.assertEqual(museum.queue_key(core_settings), "442a5a78e72d")
+
+    def test_unknown_wiki_means_no_answer(self):
+        config = museum.normalize_config({"language": "nb", "localized": "only", "localizedBy": "article"})
+        unfiltered = {"Q1": {"sitelinks": {"enwiki": {}, "nowiki": {}}}}  # sitefilter ignored
+        with mock.patch.object(museum, "entities", return_value=unfiltered):
+            self.assertIsNone(museum.described_in({"Q1"}, config))
+        with mock.patch.object(museum, "entities", return_value={}):
+            self.assertIsNone(museum.described_in({"Q1"}, config))
+
+    def test_english_titles_need_no_check(self):
+        found = [({"pageid": 1}, "Q1")]
+        with mock.patch.object(museum, "described_in", side_effect=AssertionError("asked")):
+            self.assertEqual(museum.prefer_described(found, museum.normalize_config({"language": "en"})), found)
+
+    def test_only_blames_the_language_only_when_it_dropped_something(self):
+        page = {"pageid": 7, "title": "File:X.jpg", "imageinfo": [{"width": 4000, "height": 2500}]}
+        only = museum.normalize_config({"saveDir": self.config["saveDir"], "fit": "cover", "fame": "any",
+                                        "language": "ru", "localized": "only"})
+        filters = museum.normalize_filters({"artists": ["Q296"]})
+        with mock.patch.object(museum, "active_filters", return_value=filters), \
+                mock.patch.object(museum, "resolve_filters", return_value=(filters, [])), \
+                mock.patch.object(museum, "entity_pool", return_value=[["Q1", "File:X.jpg"]]):
+            with mock.patch.object(museum, "filtered_candidates", return_value=[(page, "Q1")]), \
+                    mock.patch.object(museum, "described_in", return_value=set()):
+                with self.assertRaises(museum.NoMatch) as caught:
+                    museum.fetch_next(only)
+                self.assertEqual(str(caught.exception), "нет картин, описанных на этом языке")
+            with mock.patch.object(museum, "filtered_candidates", return_value=[]):
+                with self.assertRaises(museum.NoMatch) as caught:
+                    museum.fetch_next(only)
+                self.assertEqual(str(caught.exception), museum.strings.t("nm_too_small", "ru"))
+
+    def test_the_fallback_relaxes_only(self):
+        page = {"pageid": 7, "title": "File:X.jpg", "imageinfo": [{"width": 4000, "height": 2500}]}
+        only = museum.normalize_config({"saveDir": self.config["saveDir"], "fit": "cover", "fame": "any",
+                                        "language": "ru", "localized": "only"})
+        with mock.patch.object(museum, "random_candidates", return_value=[(page, "Q1")]), \
+                mock.patch.object(museum, "described_in", return_value=set()), \
+                mock.patch.object(museum, "enqueue", return_value=self.cache / "queue" / "commons-7.jpg") as enqueue:
+            museum.fetch_next(only, unfiltered=True)
+        enqueue.assert_called_once()
+        self.assertEqual(enqueue.call_args.args[3], museum.queue_key(only))  # still lands in the "only" queue
+
+    def test_errors_are_in_the_interface_language(self):
+        config = {**self.config, "language": "de"}
+        with mock.patch.object(museum, "fetch_next", side_effect=OSError("offline")), \
+                contextlib.redirect_stderr(io.StringIO()):
+            error = museum.switch(config)
+        self.assertEqual(error, "Wikimedia nicht erreichbar: offline")
+
+
 class SeedTest(unittest.TestCase):
     """The bundled painter lists: a first start or a week-old cache never
     waits for Wikidata; the refresh runs behind."""

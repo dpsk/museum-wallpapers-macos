@@ -1,5 +1,7 @@
 """Settings, locks, strings and the platform helpers that need no macOS."""
 
+import contextlib
+import io
 import json
 import os
 import tempfile
@@ -91,32 +93,54 @@ class SpawnTest(unittest.TestCase):
 
 
 class StringsTest(unittest.TestCase):
-    def test_every_language_has_every_key(self):
-        keys = {lang: set(table) for lang, table in strings.STRINGS.items()}
-        for lang, found in keys.items():
-            self.assertEqual(found, keys["en"], lang)
+    def test_every_language_has_every_key_and_placeholder(self):
+        tables = strings.tables()
+        self.assertEqual(set(tables), set(core.LANGUAGES[1:]))
+        for lang, table in tables.items():
+            self.assertEqual(set(table), set(strings.ENGLISH), lang)
+            for key, text in table.items():
+                self.assertEqual(strings.placeholders(text), strings.placeholders(strings.ENGLISH[key]),
+                                 f"{lang}: {key}")
 
     def test_fallback_to_english(self):
-        self.assertEqual(strings.t("quit", {"language": "de"}), "Quit Museum Wallpapers")
+        self.assertEqual(strings.t("quit", {"language": "de"}), "Museum Wallpapers beenden")
         self.assertEqual(strings.t("quit", {"language": "ru"}), "Завершить Museum Wallpapers")
+        self.assertEqual(strings.t("quit", {"language": "ja"}), "Quit Museum Wallpapers")
         self.assertEqual(strings.t("more_by", "en", name="Claude Monet"), "More by Claude Monet")
+
+    def test_interface_language(self):
+        self.assertEqual(strings.ui_language({"language": "pl"}), "pl")
+        self.assertEqual(strings.ui_language({"language": "ja"}), "en")
+        self.assertEqual(strings.ui_language("pt-br"), "en")
+        with mock.patch.object(core.PLATFORM, "ui_language", return_value="uk"):
+            self.assertEqual(strings.ui_language(core.normalize_config({})), "uk")
+
+    def test_broken_strings_fall_back_to_english(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / "strings.json"
+            broken.write_text("{not json", encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(strings.load_strings(broken), {"en": strings.ENGLISH})
+                self.assertEqual(strings.load_strings(Path(tmp) / "missing.json"), {"en": strings.ENGLISH})
+            partial = Path(tmp) / "partial.json"
+            partial.write_text('{"de": {"quit": "Beenden", "more_by": "Mehr von {wer}"}}', encoding="utf-8")
+            with mock.patch.object(strings, "_tables", strings.load_strings(partial)):
+                self.assertEqual(strings.t("quit", "de"), "Beenden")
+                self.assertEqual(strings.t("next", "de"), "Next painting")  # per key
+                self.assertEqual(strings.t("more_by", "de", name="Monet"), "More by Monet")  # bad placeholder
 
     def test_interval_labels(self):
         self.assertEqual(strings.interval_label(15), "15 minutes")
         self.assertEqual(strings.interval_label(60), "1 hour")
         self.assertEqual(strings.interval_label(180, "ru"), "3 часа")
         self.assertEqual(strings.interval_label(360, "ru"), "6 часов")
+        self.assertEqual(strings.interval_label(180, "pl"), "3 godziny")
         self.assertEqual(strings.interval_label(0, "ru"), "Только по запросу")
-
-    def test_short_intervals(self):
-        self.assertEqual([strings.short_interval(m) for m in strings.CARD_INTERVALS],
-                         ["15m", "30m", "1h", "3h", "6h", "1d", "Off"])
-        self.assertEqual(strings.short_interval(180, "ru"), "3ч")
-        self.assertEqual(strings.short_interval(0, "ru"), "Выкл")
+        self.assertEqual(strings.interval_label(45), "45 min")
 
     def test_menu_values_are_known(self):
         for minutes in core.INTERVALS:
-            strings.interval_label(minutes)
+            self.assertIn(f"interval_{minutes}", strings.ENGLISH)
         for lang in core.LANGUAGES[1:]:
             self.assertIn(lang, strings.LANGUAGE_NAMES)
 
