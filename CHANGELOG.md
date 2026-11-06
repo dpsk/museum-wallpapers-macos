@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — 2026-11-06
+
+- **By default only paintings with a Wikipedia article in your language**
+  (In my language → Only described ones; Described means → Has a Wikipedia
+  article in my language), so the card tells the painting's own story. A
+  search round still takes ~6–10 s (measured for Russian and English). The
+  queue is refilled once after the update, since it was fetched for the old
+  default; a setting chosen in the menu stays as it was.
+
 ## 0.2.0 — 2026-11-06
 
 From the Omarchy plugin 0.1.3–0.1.4 (#2):

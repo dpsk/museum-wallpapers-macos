@@ -114,17 +114,19 @@ painting on screen at once, including the caption on the wallpaper.
 Painters are picked by how many Wikipedias cover them, whatever language you
 read in, but not every painting is described in every language: among the
 famous painters' works, about 21% have a Russian title and 12% a Russian
-Wikipedia article (English is nearly complete). **In my language** decides
-what to do about it:
+Wikipedia article. By default you get only paintings that have a Wikipedia
+article in your language, so the card always has a story about the painting
+itself to tell. **In my language** and **Described means** change that:
 
 | In my language | |
 | --- | --- |
-| **Described ones first** (default) | Each search prefers paintings described in your language, and takes the others when there are none |
-| **Only described ones** | Only those; when none turns up, a random painting is shown with a note |
+| **Only described ones** (default) | Only those; when none turns up, a random painting is shown with a note |
+| **Described ones first** | Each search prefers paintings described in your language, and takes the others when there are none |
 | **No preference** | Language plays no part in which painting comes next |
 
-**Described means** sets what counts: **Has a title in my language** (a
-Wikidata label, the default) or **Has a Wikipedia article in my language**.
+**Described means** sets what counts: **Has a Wikipedia article in my
+language** (the default) or **Has a title in my language** (a Wikidata label;
+a much wider choice, but the story is then often about the artist).
 The description itself falls back when your language has nothing:
 
 1. The painting's own Wikipedia article in your language.
@@ -149,8 +151,8 @@ also edit by hand.
 | `fit` | `"blur"` | Fit | `blur` (framed by a blurred copy of itself), `auto` (fill unless that crops more than 10%), `wall` (on a dark wall), `cover` (fill and crop) |
 | `caption` | `"bottom-right"` | Caption | `off`, `bottom-right`, `bottom-left`, `top-right`, `top-left` |
 | `language` | `"auto"` | Language | Language of the interface and the descriptions; `auto` follows macOS |
-| `localized` | `"prefer"` | In my language | `prefer` paintings described in your language, show `only` those, or `all` alike |
-| `localizedBy` | `"title"` | Described means | `title` (Wikidata has its title in your language) or `article` (Wikipedia has an article about it) |
+| `localized` | `"only"` | In my language | Show `only` paintings described in your language, `prefer` them, or `all` alike |
+| `localizedBy` | `"article"` | Described means | `article` (Wikipedia has an article about it in your language) or `title` (Wikidata has its title in it) |
 | `notifyOnChange` | `false` | Menu | A notification with the painting each time it changes |
 | `checkForUpdates` | `true` | Menu | Ask GitHub once a day for a newer version |
 | `saveDir` | `~/Pictures/Museum Wallpapers` | Menu: Open collection folder | Where **Save** puts paintings; also the offline fallback |

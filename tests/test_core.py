@@ -291,9 +291,10 @@ class SwitchTest(unittest.TestCase):
         ]
         for patch in self.patches:
             patch.start()
-        # Framing and the caption have their own tests; here the painting is shown as is.
+        # Framing and the caption have their own tests; here the painting is shown as is,
+        # and the language preference (its own tests below) plays no part.
         self.config = museum.normalize_config({"saveDir": str(root / "saved"), "fit": "cover", "fame": "any",
-                                               "caption": "off"})
+                                               "caption": "off", "localized": "all"})
 
     def tearDown(self):
         mock.patch.stopall()
@@ -841,8 +842,8 @@ class SwitchTest(unittest.TestCase):
         answer = {"Q1": {"labels": {}, "sitelinks": {}},
                   "Q2": {"labels": {"ru": {"value": "Девятый вал"}}, "sitelinks": {}},
                   "Q3": {"labels": {"ru": {"value": "Гадалка"}}, "sitelinks": {"ruwiki": {"title": "Гадалка"}}}}
-        prefer = museum.normalize_config({"language": "ru", "localized": "prefer"})
-        only = museum.normalize_config({"language": "ru", "localized": "only"})
+        prefer = museum.normalize_config({"language": "ru", "localized": "prefer", "localizedBy": "title"})
+        only = museum.normalize_config({"language": "ru", "localized": "only", "localizedBy": "title"})
         by_article = museum.normalize_config({"language": "ru", "localized": "only", "localizedBy": "article"})
         with mock.patch.object(museum, "entities", return_value=answer) as entities:
             self.assertEqual([q for _, q in museum.prefer_described(found, prefer)], ["Q2", "Q3", "Q1"])
@@ -856,10 +857,11 @@ class SwitchTest(unittest.TestCase):
             self.assertEqual(museum.prefer_described(found, only), found)  # no answer: no preference
 
     def test_language_preference_settings(self):
+        # Default: only paintings with a Wikipedia article in the reader's language.
         config = museum.normalize_config({})
-        self.assertEqual((config["localized"], config["localizedBy"]), ("prefer", "title"))
+        self.assertEqual((config["localized"], config["localizedBy"]), ("only", "article"))
         odd = museum.normalize_config({"localized": "never", "localizedBy": 3})
-        self.assertEqual((odd["localized"], odd["localizedBy"]), ("prefer", "title"))
+        self.assertEqual((odd["localized"], odd["localizedBy"]), ("only", "article"))
         self.assertNotEqual(museum.queue_key(museum.normalize_config({"localized": "only"})),
                             museum.queue_key(museum.normalize_config({"localized": "all"})))
         # "prefer" and "all" only reorder: the queue key (and the queue) stay as before 0.2.0.
@@ -867,8 +869,8 @@ class SwitchTest(unittest.TestCase):
             config = museum.normalize_config({"language": "ru", "localized": localized})
             self.assertEqual(museum.queue_key(config), museum.filter_key(
                 {"filters": museum.active_filters(config), "fame": "famous", "language": "ru"}))
-        core_settings = museum.normalize_config({"language": "ru"})
-        self.assertEqual(museum.queue_key(core_settings), "442a5a78e72d")
+        prefer = museum.normalize_config({"language": "ru", "localized": "prefer"})
+        self.assertEqual(museum.queue_key(prefer), "442a5a78e72d")
 
     def test_unknown_wiki_means_no_answer(self):
         config = museum.normalize_config({"language": "nb", "localized": "only", "localizedBy": "article"})
@@ -881,7 +883,8 @@ class SwitchTest(unittest.TestCase):
     def test_english_titles_need_no_check(self):
         found = [({"pageid": 1}, "Q1")]
         with mock.patch.object(museum, "described_in", side_effect=AssertionError("asked")):
-            self.assertEqual(museum.prefer_described(found, museum.normalize_config({"language": "en"})), found)
+            english = museum.normalize_config({"language": "en", "localized": "prefer", "localizedBy": "title"})
+            self.assertEqual(museum.prefer_described(found, english), found)
 
     def test_only_blames_the_language_only_when_it_dropped_something(self):
         page = {"pageid": 7, "title": "File:X.jpg", "imageinfo": [{"width": 4000, "height": 2500}]}

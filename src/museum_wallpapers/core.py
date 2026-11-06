@@ -107,8 +107,8 @@ DEFAULTS = {
     # Paintings described in the reader's language: first ("prefer"), only
     # those ("only"), or no preference ("all"); described means Wikidata has
     # the painting's title in it ("title") or Wikipedia an article ("article").
-    "localized": "prefer",
-    "localizedBy": "title",
+    "localized": "only",
+    "localizedBy": "article",
     "minRatio": 1.3,
     "maxRatio": 2.0,
 }

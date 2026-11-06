@@ -16,7 +16,8 @@ Done and pushed to `main`:
   `data/strings.json`, same keys checked by a test). Since 0.2.0 settings
   live in the menu only (the card has a gear that opens it); **In my
   language** (prefer / only / all) orders or narrows each search round by
-  one wbgetentities call. Descriptions prefer the reader's language
+  one wbgetentities call; since 0.2.1 the default is only paintings with a
+  Wikipedia article in the reader's language. Descriptions prefer the reader's language
   (painting article, then artist article) before English.
 - The updater (`src/museum_wallpapers/updater.py`): daily check of the latest
   GitHub release, download verified by size and SHA-256, bundle id / version /

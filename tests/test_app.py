@@ -134,12 +134,12 @@ class AppTest(unittest.TestCase):
 
     def test_language_preference_from_the_menu(self):
         items = self.items()
-        self.assertTrue(items["Described ones first"].checked)
-        self.assertTrue(items["Has a title in my language"].checked)
-        items["Only described ones"].action()
-        items["Has a Wikipedia article in my language"].action()
+        self.assertTrue(items["Only described ones"].checked)
+        self.assertTrue(items["Has a Wikipedia article in my language"].checked)
+        items["Described ones first"].action()
+        items["Has a title in my language"].action()
         config = core.load_config()
-        self.assertEqual((config["localized"], config["localizedBy"]), ("only", "article"))
+        self.assertEqual((config["localized"], config["localizedBy"]), ("prefer", "title"))
         titles = [item.title for _, item in flatten(self.app.menu())]
         self.assertLess(titles.index("Language"), titles.index("In my language"))
         self.assertLess(titles.index("In my language"), titles.index("Described means"))
