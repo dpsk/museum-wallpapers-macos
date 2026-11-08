@@ -13,6 +13,10 @@ the plugin's popup card under a menu bar icon.
 
 Website: **[nikaliuk.in](https://nikaliuk.in/)**
 
+![Monet, Géricault, Corot and Kandinsky in turn as the wallpaper, with the card under the menu bar icon showing the title, artist, museum and the painting's story](https://nikaliuk.in/media/demo/mac-en.gif)
+
+<sub>The same walk with the interface and captions in Russian: [mac-ru.gif](https://nikaliuk.in/media/demo/mac-ru.gif).</sub>
+
 - **Endless and high-resolution.** Tens of thousands of paintings listed on
   Wikidata, shown from their Wikimedia Commons scans: only scans large enough
   for your screen (up to 4K), only landscape-shaped works, never tiles or
